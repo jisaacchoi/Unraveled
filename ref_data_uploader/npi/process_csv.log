@@ -1,0 +1,788 @@
+2026-01-06 16:06:58 - root - INFO - Loading configuration from: config.yaml
+2026-01-06 16:06:58 - __main__ - INFO - Reading CSV file: input/filename_filtered.csv
+2026-01-06 16:06:58 - __main__ - INFO - Filter 1: 'Entity Type Code' == 2 (converted to '2.0' for matching)
+2026-01-06 16:06:58 - __main__ - INFO - Loading filter values for 'Provider Business Practice Location Address Postal Code' from: input/Illinois_Zip.csv
+2026-01-06 16:06:58 - __main__ - INFO - External CSV file has 1607 rows and columns: ['Zipcode']
+2026-01-06 16:06:58 - __main__ - INFO - Loaded 1,607 filter values for 'Provider Business Practice Location Address Postal Code' from external file
+2026-01-06 16:06:58 - __main__ - INFO -   Sample values: ['62354', '61237', '61605', '62279', '62050', '60650', '61132', '62240', '60433', '60425']...
+2026-01-06 16:06:58 - __main__ - INFO - Filter 1: 'Entity Type Code' must match one of 1 values
+2026-01-06 16:06:58 - __main__ - INFO -   Filter 1 values: ['2.0']
+2026-01-06 16:06:58 - __main__ - INFO - Filter 2: 'Provider Business Practice Location Address Postal Code' must match one of 1,607 values
+2026-01-06 16:06:58 - __main__ - INFO -   Filter 2 sample values: ['62354', '61237', '61605', '62279', '62050']... (showing first 5)
+2026-01-06 16:06:58 - __main__ - INFO - Applying filters: 'Entity Type Code' in 1 values AND 'Provider Business Practice Location Address Postal Code' in 1607 values
+2026-01-06 16:07:10 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:07:11 - __main__ - INFO - DEBUG - Column 'Entity Type Code' data types (original): float64
+2026-01-06 16:07:11 - __main__ - INFO - DEBUG - Column 'Entity Type Code' data types (after float->text conversion): object
+2026-01-06 16:07:11 - __main__ - INFO - DEBUG - Sample values in 'Entity Type Code' (as text): ['2.0']
+2026-01-06 16:07:11 - __main__ - INFO - DEBUG - Filter values for 'Entity Type Code': ['2.0']
+2026-01-06 16:07:11 - __main__ - INFO - DEBUG - Total rows before filter 1: 100,000, Non-null rows: 100,000
+2026-01-06 16:07:15 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:07:15 - __main__ - INFO - DEBUG - Column 'Provider Business Practice Location Address Postal Code' data types (original): object
+2026-01-06 16:07:15 - __main__ - INFO - DEBUG - Column 'Provider Business Practice Location Address Postal Code' data types (after text conversion): object
+2026-01-06 16:07:15 - __main__ - INFO - DEBUG - Sample values in 'Provider Business Practice Location Address Postal Code' (5-digit extracted, as text): ['283044552', '945594515', '604508812', '615545038', '500363930', '215021950', '218041884', '494311908', '134131068', '352051248']
+2026-01-06 16:07:15 - __main__ - INFO - DEBUG - Filter values for 'Provider Business Practice Location Address Postal Code' (5-digit): ['62354', '61605', '61237', '62279', '62050', '60650', '61132', '62240', '60433', '60425']
+2026-01-06 16:07:15 - __main__ - INFO - DEBUG - Total rows before filter 2: 100,000, Non-null rows in original: 100,000
+2026-01-06 16:07:20 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:07:20 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:07:20 - __main__ - INFO - DEBUG - Rows after filter 2: 479
+2026-01-06 16:07:20 - __main__ - INFO - DEBUG - Sample filtered values: ['62801' '62959' '60521' '62521' '62881']
+2026-01-06 16:07:20 - __main__ - INFO - Chunk 1: Read 100,000 rows, filtered 479 rows (total read: 100,000)
+2026-01-06 16:07:28 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 BEFORE any filtering - 1 row(s)
+2026-01-06 16:07:28 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code: 606213114
+2026-01-06 16:07:29 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 AFTER filter 1 - 1 row(s)
+2026-01-06 16:07:30 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code: 606213114
+2026-01-06 16:07:31 - __main__ - DEBUG - Chunk 2: NPI 1851303473 - RIGHT BEFORE filter 2:
+2026-01-06 16:07:31 - __main__ - DEBUG -   - Actual 5-digit value in column 'Provider Business Practice Location Address Postal Code': '606213114'
+2026-01-06 16:07:31 - __main__ - DEBUG -   - Type: <class 'str'>, Length: 9, Repr: '606213114'
+2026-01-06 16:07:31 - __main__ - DEBUG -   - Is in filter_values2_5digit set? False
+2026-01-06 16:07:31 - __main__ - DEBUG -   - Checking for similar values in filter set...
+2026-01-06 16:07:31 - __main__ - DEBUG -     Found similar: '60621' matches '606213114'
+2026-01-06 16:07:31 - __main__ - DEBUG -   - Sample filter values (first 5): ["'62354'", "'61605'", "'61237'", "'62279'", "'62050'"]
+2026-01-06 16:07:31 - __main__ - DEBUG -   - Filter values type: <class 'str'>
+2026-01-06 16:07:31 - __main__ - DEBUG - Chunk 2: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:07:31 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:07:31 - __main__ - INFO - Chunk 2: Read 100,000 rows, filtered 440 rows (total read: 200,000)
+2026-01-06 16:07:37 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:07:38 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:07:40 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:07:40 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:07:40 - __main__ - INFO - Chunk 3: Read 100,000 rows, filtered 650 rows (total read: 300,000)
+2026-01-06 16:07:44 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:07:45 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:07:47 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:07:47 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:07:47 - __main__ - INFO - Chunk 4: Read 100,000 rows, filtered 448 rows (total read: 400,000)
+2026-01-06 16:07:53 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:07:55 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:07:56 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:07:56 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:07:56 - __main__ - INFO - Chunk 5: Read 100,000 rows, filtered 518 rows (total read: 500,000)
+2026-01-06 16:08:04 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:08:06 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:08:08 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:08:08 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:08:08 - __main__ - INFO - Chunk 6: Read 100,000 rows, filtered 394 rows (total read: 600,000)
+2026-01-06 16:08:15 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:08:18 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:08:21 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:08:21 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:08:21 - __main__ - INFO - Chunk 7: Read 100,000 rows, filtered 335 rows (total read: 700,000)
+2026-01-06 16:08:31 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:08:34 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:08:36 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:08:36 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:08:36 - __main__ - INFO - Chunk 8: Read 100,000 rows, filtered 277 rows (total read: 800,000)
+2026-01-06 16:08:54 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:08:59 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:09:04 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:09:04 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:09:04 - __main__ - INFO - Chunk 9: Read 100,000 rows, filtered 263 rows (total read: 900,000)
+2026-01-06 16:09:13 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:09:14 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:09:15 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:09:15 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:09:15 - __main__ - INFO - Chunk 10: Read 100,000 rows, filtered 231 rows (total read: 1,000,000)
+2026-01-06 16:09:21 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:09:22 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:09:23 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:09:23 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:09:23 - __main__ - INFO - Chunk 11: Read 100,000 rows, filtered 231 rows (total read: 1,100,000)
+2026-01-06 16:09:28 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:09:29 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:09:30 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:09:30 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:09:30 - __main__ - INFO - Chunk 12: Read 100,000 rows, filtered 281 rows (total read: 1,200,000)
+2026-01-06 16:09:36 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:09:37 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:09:39 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:09:39 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:09:39 - __main__ - INFO - Chunk 13: Read 100,000 rows, filtered 318 rows (total read: 1,300,000)
+2026-01-06 16:09:44 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:09:45 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:09:46 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:09:46 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:09:46 - __main__ - INFO - Chunk 14: Read 100,000 rows, filtered 179 rows (total read: 1,400,000)
+2026-01-06 16:09:52 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:09:54 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:09:55 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:09:55 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:09:55 - __main__ - INFO - Chunk 15: Read 100,000 rows, filtered 137 rows (total read: 1,500,000)
+2026-01-06 16:10:00 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:10:02 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:10:03 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:10:03 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:10:03 - __main__ - INFO - Chunk 16: Read 100,000 rows, filtered 152 rows (total read: 1,600,000)
+2026-01-06 16:10:09 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:10:10 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:10:12 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:10:12 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:10:12 - __main__ - INFO - Chunk 17: Read 100,000 rows, filtered 152 rows (total read: 1,700,000)
+2026-01-06 16:10:23 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:10:25 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:10:27 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:10:27 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:10:27 - __main__ - INFO - Chunk 18: Read 100,000 rows, filtered 141 rows (total read: 1,800,000)
+2026-01-06 16:10:33 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:10:34 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:10:36 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:10:36 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:10:36 - __main__ - INFO - Chunk 19: Read 67,280 rows, filtered 91 rows (total read: 1,867,280)
+2026-01-06 16:10:36 - __main__ - INFO - Finished reading all chunks. Total rows read: 1,867,280
+2026-01-06 16:10:40 - __main__ - INFO - Filtered data: 5,717 rows
+2026-01-06 16:10:40 - __main__ - INFO - Saving filtered CSV to: input/filename_filtered_Illinois_institutions_2.csv
+2026-01-06 16:10:42 - __main__ - INFO - ============================================================
+2026-01-06 16:10:42 - __main__ - INFO - Uploading data to PostgreSQL...
+2026-01-06 16:10:42 - __main__ - INFO - ============================================================
+2026-01-06 16:10:42 - __main__ - INFO - Connecting to database: postgres@localhost
+2026-01-06 16:10:43 - __main__ - INFO - Database connection successful!
+2026-01-06 16:10:43 - __main__ - INFO - Preparing to upload 5717 rows to table 'provider_data' (if_exists=replace)...
+2026-01-06 16:10:43 - __main__ - INFO - Dropped existing table 'provider_data'
+2026-01-06 16:10:43 - __main__ - INFO - Starting upload in chunks of 100,000 rows...
+2026-01-06 16:10:43 - __main__ - INFO - Uploading chunk 1/1 (5,717 rows)...
+2026-01-06 16:10:59 - __main__ - INFO - Chunk 1 completed. Total uploaded: 5,717/5,717 rows (100.0%)
+2026-01-06 16:10:59 - __main__ - INFO - ============================================================
+2026-01-06 16:10:59 - __main__ - INFO - Successfully uploaded 5,717 rows to table 'provider_data'
+2026-01-06 16:10:59 - __main__ - INFO - ============================================================
+2026-01-06 16:13:57 - root - INFO - Loading configuration from: config.yaml
+2026-01-06 16:13:57 - __main__ - INFO - Reading CSV file: input/filename_filtered.csv
+2026-01-06 16:13:57 - __main__ - INFO - Filter 1: 'Entity Type Code' == 2 (converted to '2.0' for matching)
+2026-01-06 16:13:57 - __main__ - INFO - Loading filter values for 'Provider Business Practice Location Address Postal Code' from: input/Illinois_Zip.csv
+2026-01-06 16:13:57 - __main__ - INFO - External CSV file has 1607 rows and columns: ['Zipcode']
+2026-01-06 16:13:57 - __main__ - INFO - Loaded 1,607 filter values for 'Provider Business Practice Location Address Postal Code' from external file
+2026-01-06 16:13:57 - __main__ - INFO -   Sample values: ['61815', '62065', '62812', '60442', '60612', '62718', '62312', '60601', '60597', '62704']...
+2026-01-06 16:13:57 - __main__ - INFO - Filter 1: 'Entity Type Code' must match one of 1 values
+2026-01-06 16:13:57 - __main__ - INFO -   Filter 1 values: ['2.0']
+2026-01-06 16:13:57 - __main__ - INFO - Filter 2: 'Provider Business Practice Location Address Postal Code' must match one of 1,607 values
+2026-01-06 16:13:57 - __main__ - INFO -   Filter 2 sample values: ['61815', '62065', '62812', '60442', '60612']... (showing first 5)
+2026-01-06 16:13:57 - __main__ - INFO - Applying filters: 'Entity Type Code' in 1 values AND 'Provider Business Practice Location Address Postal Code' in 1607 values
+2026-01-06 16:14:11 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:14:11 - __main__ - INFO - Created 5-digit column 'Provider Business Mailing Address Postal Code_5digit' from 'Provider Business Mailing Address Postal Code'
+2026-01-06 16:14:12 - __main__ - INFO - Created 5-digit column 'Provider Business Practice Location Address Postal Code_5digit' from 'Provider Business Practice Location Address Postal Code'
+2026-01-06 16:14:12 - __main__ - INFO - Using 5-digit column 'Provider Business Practice Location Address Postal Code_5digit' for filtering instead of 'Provider Business Practice Location Address Postal Code'
+2026-01-06 16:14:12 - __main__ - INFO - DEBUG - Column 'Entity Type Code' data types (original): float64
+2026-01-06 16:14:12 - __main__ - INFO - DEBUG - Column 'Entity Type Code' data types (after float->text conversion): object
+2026-01-06 16:14:12 - __main__ - INFO - DEBUG - Sample values in 'Entity Type Code' (as text): ['2.0']
+2026-01-06 16:14:12 - __main__ - INFO - DEBUG - Filter values for 'Entity Type Code': ['2.0']
+2026-01-06 16:14:12 - __main__ - INFO - DEBUG - Total rows before filter 1: 100,000, Non-null rows: 100,000
+2026-01-06 16:14:14 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:14:14 - __main__ - DEBUG - Chunk 1: Filter 2 - column2='Provider Business Practice Location Address Postal Code', filter_column2_actual='Provider Business Practice Location Address Postal Code_5digit', filter_col_to_use='Provider Business Practice Location Address Postal Code_5digit'
+2026-01-06 16:14:14 - __main__ - DEBUG -   - Available columns with 'zip': []
+2026-01-06 16:14:14 - __main__ - DEBUG -   - Available _5digit columns: ['Provider Business Mailing Address Postal Code_5digit', 'Provider Business Practice Location Address Postal Code_5digit']
+2026-01-06 16:14:14 - __main__ - INFO - DEBUG - Column 'Provider Business Practice Location Address Postal Code' data types (original): object
+2026-01-06 16:14:14 - __main__ - INFO - DEBUG - Column 'Provider Business Practice Location Address Postal Code_5digit' data types (after text conversion): object
+2026-01-06 16:14:14 - __main__ - INFO - DEBUG - Sample values in 'Provider Business Practice Location Address Postal Code_5digit' (5-digit extracted, as text): ['28304', '94559', '60450', '61554', '50036', '21502', '21804', '49431', '13413', '35205']
+2026-01-06 16:14:14 - __main__ - INFO - DEBUG - Filter values for 'Provider Business Practice Location Address Postal Code' (5-digit): ['61815', '62065', '62812', '60442', '60612', '62718', '62312', '60601', '60597', '62704']
+2026-01-06 16:14:14 - __main__ - INFO - DEBUG - Total rows before filter 2: 100,000, Non-null rows in original: 100,000
+2026-01-06 16:14:16 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:14:16 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:14:16 - __main__ - INFO - DEBUG - Rows after filter 2: 3,894
+2026-01-06 16:14:16 - __main__ - INFO - DEBUG - Sample filtered values: ['60450' '61554' '61820' '60089' '60612']
+2026-01-06 16:14:16 - __main__ - INFO - Chunk 1: Read 100,000 rows, filtered 3,894 rows (total read: 100,000)
+2026-01-06 16:14:22 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 BEFORE any filtering - 1 row(s)
+2026-01-06 16:14:22 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code: 606213114
+2026-01-06 16:14:24 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 AFTER filter 1 - 1 row(s)
+2026-01-06 16:14:24 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code: 606213114
+2026-01-06 16:14:24 - __main__ - DEBUG - Chunk 2: Filter 2 - column2='Provider Business Practice Location Address Postal Code', filter_column2_actual='Provider Business Practice Location Address Postal Code_5digit', filter_col_to_use='Provider Business Practice Location Address Postal Code_5digit'
+2026-01-06 16:14:24 - __main__ - DEBUG -   - Available columns with 'zip': []
+2026-01-06 16:14:24 - __main__ - DEBUG -   - Available _5digit columns: ['Provider Business Mailing Address Postal Code_5digit', 'Provider Business Practice Location Address Postal Code_5digit']
+2026-01-06 16:14:25 - __main__ - DEBUG - Chunk 2: NPI 1851303473 - RIGHT BEFORE filter 2:
+2026-01-06 16:14:25 - __main__ - DEBUG -   - Actual 5-digit value in column 'Provider Business Practice Location Address Postal Code_5digit': '60621'
+2026-01-06 16:14:25 - __main__ - DEBUG -   - Type: <class 'str'>, Length: 5, Repr: '60621'
+2026-01-06 16:14:25 - __main__ - DEBUG -   - Is in filter_values2_5digit set? True
+2026-01-06 16:14:25 - __main__ - DEBUG -   - Sample filter values (first 5): ["'61815'", "'62065'", "'62812'", "'60442'", "'60612'"]
+2026-01-06 16:14:25 - __main__ - DEBUG -   - Filter values type: <class 'str'>
+2026-01-06 16:14:25 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 AFTER filter 2 - 1 row(s)
+2026-01-06 16:14:25 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code (original): 606213114, Postal Code (5-digit): 60621
+2026-01-06 16:14:25 - __main__ - INFO - Chunk 2: Read 100,000 rows, filtered 4,145 rows (total read: 200,000)
+2026-01-06 16:14:31 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:14:32 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:14:33 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:14:33 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:14:33 - __main__ - INFO - Chunk 3: Read 100,000 rows, filtered 3,688 rows (total read: 300,000)
+2026-01-06 16:14:38 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:14:40 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:14:41 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:14:41 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:14:41 - __main__ - INFO - Chunk 4: Read 100,000 rows, filtered 4,165 rows (total read: 400,000)
+2026-01-06 16:14:47 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:14:49 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:14:50 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:14:50 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:14:50 - __main__ - INFO - Chunk 5: Read 100,000 rows, filtered 4,457 rows (total read: 500,000)
+2026-01-06 16:14:58 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:15:00 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:15:04 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:15:04 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:15:04 - __main__ - INFO - Chunk 6: Read 100,000 rows, filtered 4,764 rows (total read: 600,000)
+2026-01-06 16:15:10 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:15:12 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:15:14 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:15:14 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:15:14 - __main__ - INFO - Chunk 7: Read 100,000 rows, filtered 4,038 rows (total read: 700,000)
+2026-01-06 16:15:21 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:15:24 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:15:27 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:15:27 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:15:27 - __main__ - INFO - Chunk 8: Read 100,000 rows, filtered 3,885 rows (total read: 800,000)
+2026-01-06 16:15:43 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:15:47 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:15:51 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:15:51 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:15:51 - __main__ - INFO - Chunk 9: Read 100,000 rows, filtered 3,824 rows (total read: 900,000)
+2026-01-06 16:16:04 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:16:08 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:16:10 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:16:10 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:16:10 - __main__ - INFO - Chunk 10: Read 100,000 rows, filtered 3,421 rows (total read: 1,000,000)
+2026-01-06 16:16:15 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:16:17 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:16:18 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:16:18 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:16:18 - __main__ - INFO - Chunk 11: Read 100,000 rows, filtered 3,570 rows (total read: 1,100,000)
+2026-01-06 16:16:23 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:16:25 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:16:26 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:16:26 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:16:26 - __main__ - INFO - Chunk 12: Read 100,000 rows, filtered 3,323 rows (total read: 1,200,000)
+2026-01-06 16:16:31 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:16:32 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:16:33 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:16:33 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:16:33 - __main__ - INFO - Chunk 13: Read 100,000 rows, filtered 3,244 rows (total read: 1,300,000)
+2026-01-06 16:16:38 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:16:39 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:16:41 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:16:41 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:16:41 - __main__ - INFO - Chunk 14: Read 100,000 rows, filtered 3,131 rows (total read: 1,400,000)
+2026-01-06 16:16:45 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:16:47 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:16:48 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:16:48 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:16:48 - __main__ - INFO - Chunk 15: Read 100,000 rows, filtered 3,003 rows (total read: 1,500,000)
+2026-01-06 16:16:54 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:16:55 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:16:56 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:16:56 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:16:56 - __main__ - INFO - Chunk 16: Read 100,000 rows, filtered 3,718 rows (total read: 1,600,000)
+2026-01-06 16:17:02 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:17:04 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:17:05 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:17:05 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:17:05 - __main__ - INFO - Chunk 17: Read 100,000 rows, filtered 3,268 rows (total read: 1,700,000)
+2026-01-06 16:17:11 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:17:13 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:17:15 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:17:15 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:17:15 - __main__ - INFO - Chunk 18: Read 100,000 rows, filtered 3,192 rows (total read: 1,800,000)
+2026-01-06 16:17:20 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found in chunk before filtering
+2026-01-06 16:17:22 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-06 16:17:23 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-06 16:17:23 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-06 16:17:23 - __main__ - INFO - Chunk 19: Read 67,280 rows, filtered 2,190 rows (total read: 1,867,280)
+2026-01-06 16:17:23 - __main__ - INFO - Finished reading all chunks. Total rows read: 1,867,280
+2026-01-06 16:17:35 - __main__ - INFO - Filtered data: 68,920 rows
+2026-01-06 16:17:35 - __main__ - INFO - Saving filtered CSV to: input/filename_filtered_Illinois_institutions_2.csv
+2026-01-06 16:17:52 - __main__ - INFO - ============================================================
+2026-01-06 16:17:52 - __main__ - INFO - Uploading data to PostgreSQL...
+2026-01-06 16:17:52 - __main__ - INFO - ============================================================
+2026-01-06 16:17:52 - __main__ - INFO - Connecting to database: postgres@localhost
+2026-01-06 16:17:52 - __main__ - INFO - Database connection successful!
+2026-01-06 16:17:52 - __main__ - INFO - Preparing to upload 68920 rows to table 'provider_data' (if_exists=replace)...
+2026-01-06 16:17:52 - __main__ - INFO - Dropped existing table 'provider_data'
+2026-01-06 16:17:52 - __main__ - INFO - Starting upload in chunks of 100,000 rows...
+2026-01-06 16:17:52 - __main__ - INFO - Uploading chunk 1/1 (68,920 rows)...
+2026-01-06 16:20:12 - __main__ - INFO - Chunk 1 completed. Total uploaded: 68,920/68,920 rows (100.0%)
+2026-01-06 16:20:12 - __main__ - INFO - ============================================================
+2026-01-06 16:20:12 - __main__ - INFO - Successfully uploaded 68,920 rows to table 'provider_data'
+2026-01-06 16:20:12 - __main__ - INFO - ============================================================
+2026-01-08 12:04:02 - root - INFO - Loading configuration from: config.yaml
+2026-01-08 12:04:02 - __main__ - INFO - Reading CSV file: input/filename_filtered.csv
+2026-01-08 12:04:02 - __main__ - INFO - Filter 1: 'Entity Type Code' == 2 (converted to '2.0' for matching)
+2026-01-08 12:04:02 - __main__ - INFO - Loading filter values for 'Provider Business Practice Location Address Postal Code' from: input/Illinois_Zip.csv
+2026-01-08 12:04:02 - __main__ - INFO - External CSV file has 1607 rows and columns: ['Zipcode']
+2026-01-08 12:04:02 - __main__ - INFO - Loaded 1,607 filter values for 'Provider Business Practice Location Address Postal Code' from external file
+2026-01-08 12:04:02 - __main__ - INFO -   Sample values: ['60918', '62022', '62436', '62630', '60612', '62380', '61741', '61064', '61276', '61531']...
+2026-01-08 12:04:02 - __main__ - INFO - Filter 1: 'Entity Type Code' must match one of 1 values
+2026-01-08 12:04:02 - __main__ - INFO -   Filter 1 values: ['2.0']
+2026-01-08 12:04:02 - __main__ - INFO - Filter 2: 'Provider Business Practice Location Address Postal Code' must match one of 1,607 values
+2026-01-08 12:04:02 - __main__ - INFO -   Filter 2 sample values: ['60918', '62022', '62436', '62630', '60612']... (showing first 5)
+2026-01-08 12:04:02 - __main__ - INFO - Applying filters: 'Entity Type Code' in 1 values AND 'Provider Business Practice Location Address Postal Code' in 1607 values
+2026-01-08 12:04:11 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:04:11 - __main__ - INFO - Created 5-digit column 'Provider Business Mailing Address Postal Code_5digit' from 'Provider Business Mailing Address Postal Code'
+2026-01-08 12:04:11 - __main__ - INFO - Created 5-digit column 'Provider Business Practice Location Address Postal Code_5digit' from 'Provider Business Practice Location Address Postal Code'
+2026-01-08 12:04:11 - __main__ - INFO - Using 5-digit column 'Provider Business Practice Location Address Postal Code_5digit' for filtering instead of 'Provider Business Practice Location Address Postal Code'
+2026-01-08 12:04:11 - __main__ - INFO - DEBUG - Column 'Entity Type Code' data types (original): float64
+2026-01-08 12:04:11 - __main__ - INFO - DEBUG - Column 'Entity Type Code' data types (after float->text conversion): object
+2026-01-08 12:04:11 - __main__ - INFO - DEBUG - Sample values in 'Entity Type Code' (as text): ['2.0']
+2026-01-08 12:04:11 - __main__ - INFO - DEBUG - Filter values for 'Entity Type Code': ['2.0']
+2026-01-08 12:04:11 - __main__ - INFO - DEBUG - Total rows before filter 1: 100,000, Non-null rows: 100,000
+2026-01-08 12:04:12 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:04:12 - __main__ - DEBUG - Chunk 1: Filter 2 - column2='Provider Business Practice Location Address Postal Code', filter_column2_actual='Provider Business Practice Location Address Postal Code_5digit', filter_col_to_use='Provider Business Practice Location Address Postal Code_5digit'
+2026-01-08 12:04:12 - __main__ - DEBUG -   - Available columns with 'zip': []
+2026-01-08 12:04:12 - __main__ - DEBUG -   - Available _5digit columns: ['Provider Business Mailing Address Postal Code_5digit', 'Provider Business Practice Location Address Postal Code_5digit']
+2026-01-08 12:04:12 - __main__ - INFO - DEBUG - Column 'Provider Business Practice Location Address Postal Code' data types (original): object
+2026-01-08 12:04:12 - __main__ - INFO - DEBUG - Column 'Provider Business Practice Location Address Postal Code_5digit' data types (after text conversion): object
+2026-01-08 12:04:12 - __main__ - INFO - DEBUG - Sample values in 'Provider Business Practice Location Address Postal Code_5digit' (5-digit extracted, as text): ['28304', '94559', '60450', '61554', '50036', '21502', '21804', '49431', '13413', '35205']
+2026-01-08 12:04:12 - __main__ - INFO - DEBUG - Filter values for 'Provider Business Practice Location Address Postal Code' (5-digit): ['60918', '62022', '62436', '62630', '60612', '62380', '61741', '61064', '61276', '61531']
+2026-01-08 12:04:12 - __main__ - INFO - DEBUG - Total rows before filter 2: 100,000, Non-null rows in original: 100,000
+2026-01-08 12:04:14 - __main__ - DEBUG - Chunk 1: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:04:14 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:04:14 - __main__ - INFO - DEBUG - Rows after filter 2: 3,894
+2026-01-08 12:04:14 - __main__ - INFO - DEBUG - Sample filtered values: ['60450' '61554' '61820' '60089' '60612']
+2026-01-08 12:04:14 - __main__ - INFO - Chunk 1: Read 100,000 rows, filtered 3,894 rows (total read: 100,000)
+2026-01-08 12:04:21 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 BEFORE any filtering - 1 row(s)
+2026-01-08 12:04:21 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code: 606213114
+2026-01-08 12:04:23 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 AFTER filter 1 - 1 row(s)
+2026-01-08 12:04:23 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code: 606213114
+2026-01-08 12:04:23 - __main__ - DEBUG - Chunk 2: Filter 2 - column2='Provider Business Practice Location Address Postal Code', filter_column2_actual='Provider Business Practice Location Address Postal Code_5digit', filter_col_to_use='Provider Business Practice Location Address Postal Code_5digit'
+2026-01-08 12:04:23 - __main__ - DEBUG -   - Available columns with 'zip': []
+2026-01-08 12:04:23 - __main__ - DEBUG -   - Available _5digit columns: ['Provider Business Mailing Address Postal Code_5digit', 'Provider Business Practice Location Address Postal Code_5digit']
+2026-01-08 12:04:25 - __main__ - DEBUG - Chunk 2: NPI 1851303473 - RIGHT BEFORE filter 2:
+2026-01-08 12:04:25 - __main__ - DEBUG -   - Actual 5-digit value in column 'Provider Business Practice Location Address Postal Code_5digit': '60621'
+2026-01-08 12:04:25 - __main__ - DEBUG -   - Type: <class 'str'>, Length: 5, Repr: '60621'
+2026-01-08 12:04:25 - __main__ - DEBUG -   - Is in filter_values2_5digit set? True
+2026-01-08 12:04:25 - __main__ - DEBUG -   - Sample filter values (first 5): ["'60918'", "'62022'", "'62436'", "'62630'", "'60612'"]
+2026-01-08 12:04:25 - __main__ - DEBUG -   - Filter values type: <class 'str'>
+2026-01-08 12:04:25 - __main__ - DEBUG - Chunk 2: Found NPI 1851303473 AFTER filter 2 - 1 row(s)
+2026-01-08 12:04:25 - __main__ - DEBUG -   - Entity Type Code: 2.0, Postal Code (original): 606213114, Postal Code (5-digit): 60621
+2026-01-08 12:04:25 - __main__ - INFO - Chunk 2: Read 100,000 rows, filtered 4,145 rows (total read: 200,000)
+2026-01-08 12:04:34 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:04:37 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:04:39 - __main__ - DEBUG - Chunk 3: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:04:39 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:04:39 - __main__ - INFO - Chunk 3: Read 100,000 rows, filtered 3,688 rows (total read: 300,000)
+2026-01-08 12:04:48 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:04:50 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:04:53 - __main__ - DEBUG - Chunk 4: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:04:53 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:04:53 - __main__ - INFO - Chunk 4: Read 100,000 rows, filtered 4,165 rows (total read: 400,000)
+2026-01-08 12:05:11 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:05:16 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:05:27 - __main__ - DEBUG - Chunk 5: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:05:27 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:05:27 - __main__ - INFO - Chunk 5: Read 100,000 rows, filtered 4,457 rows (total read: 500,000)
+2026-01-08 12:05:58 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:06:03 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:06:07 - __main__ - DEBUG - Chunk 6: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:06:07 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:06:07 - __main__ - INFO - Chunk 6: Read 100,000 rows, filtered 4,764 rows (total read: 600,000)
+2026-01-08 12:06:17 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:06:19 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:06:21 - __main__ - DEBUG - Chunk 7: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:06:21 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:06:21 - __main__ - INFO - Chunk 7: Read 100,000 rows, filtered 4,038 rows (total read: 700,000)
+2026-01-08 12:06:30 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:06:32 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:06:34 - __main__ - DEBUG - Chunk 8: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:06:34 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:06:34 - __main__ - INFO - Chunk 8: Read 100,000 rows, filtered 3,885 rows (total read: 800,000)
+2026-01-08 12:06:42 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:06:45 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:06:48 - __main__ - DEBUG - Chunk 9: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:06:48 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:06:48 - __main__ - INFO - Chunk 9: Read 100,000 rows, filtered 3,824 rows (total read: 900,000)
+2026-01-08 12:06:56 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:06:59 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:07:02 - __main__ - DEBUG - Chunk 10: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:07:02 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:07:02 - __main__ - INFO - Chunk 10: Read 100,000 rows, filtered 3,421 rows (total read: 1,000,000)
+2026-01-08 12:07:29 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:07:38 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:07:41 - __main__ - DEBUG - Chunk 11: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:07:41 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:07:41 - __main__ - INFO - Chunk 11: Read 100,000 rows, filtered 3,570 rows (total read: 1,100,000)
+2026-01-08 12:07:56 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:07:57 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:07:59 - __main__ - DEBUG - Chunk 12: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:07:59 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:07:59 - __main__ - INFO - Chunk 12: Read 100,000 rows, filtered 3,323 rows (total read: 1,200,000)
+2026-01-08 12:08:12 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:08:17 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:08:19 - __main__ - DEBUG - Chunk 13: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:08:19 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:08:19 - __main__ - INFO - Chunk 13: Read 100,000 rows, filtered 3,244 rows (total read: 1,300,000)
+2026-01-08 12:08:31 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:08:36 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:08:40 - __main__ - DEBUG - Chunk 14: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:08:40 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:08:40 - __main__ - INFO - Chunk 14: Read 100,000 rows, filtered 3,131 rows (total read: 1,400,000)
+2026-01-08 12:08:54 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:09:01 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:09:08 - __main__ - DEBUG - Chunk 15: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:09:08 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:09:08 - __main__ - INFO - Chunk 15: Read 100,000 rows, filtered 3,003 rows (total read: 1,500,000)
+2026-01-08 12:09:26 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:09:33 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:09:35 - __main__ - DEBUG - Chunk 16: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:09:35 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:09:35 - __main__ - INFO - Chunk 16: Read 100,000 rows, filtered 3,718 rows (total read: 1,600,000)
+2026-01-08 12:09:43 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:09:46 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:09:48 - __main__ - DEBUG - Chunk 17: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:09:48 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:09:48 - __main__ - INFO - Chunk 17: Read 100,000 rows, filtered 3,268 rows (total read: 1,700,000)
+2026-01-08 12:09:56 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:09:58 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:09:59 - __main__ - DEBUG - Chunk 18: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:09:59 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:09:59 - __main__ - INFO - Chunk 18: Read 100,000 rows, filtered 3,192 rows (total read: 1,800,000)
+2026-01-08 12:10:07 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found in chunk before filtering
+2026-01-08 12:10:08 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found after filter 1 (filtered out)
+2026-01-08 12:10:09 - __main__ - DEBUG - Chunk 19: NPI 1851303473 NOT found after filter 2 (filtered out)
+2026-01-08 12:10:09 - __main__ - DEBUG -   - Checking why NPI 1851303473 was filtered out...
+2026-01-08 12:10:09 - __main__ - INFO - Chunk 19: Read 67,280 rows, filtered 2,190 rows (total read: 1,867,280)
+2026-01-08 12:10:09 - __main__ - INFO - Finished reading all chunks. Total rows read: 1,867,280
+2026-01-08 12:10:22 - __main__ - INFO - Filtered data: 68,920 rows
+2026-01-08 12:10:22 - __main__ - INFO - Saving filtered CSV to: input/filename_filtered_Illinois_institutions_2.csv
+2026-01-08 12:10:54 - __main__ - INFO - ============================================================
+2026-01-08 12:10:54 - __main__ - INFO - Uploading data to PostgreSQL...
+2026-01-08 12:10:54 - __main__ - INFO - ============================================================
+2026-01-08 12:10:54 - __main__ - INFO - Connecting to database: postgres@localhost
+2026-01-08 12:10:55 - __main__ - INFO - Database connection successful!
+2026-01-08 12:10:55 - __main__ - INFO - Preparing to upload 68920 rows to table 'provider_data' (if_exists=replace)...
+2026-01-08 12:10:55 - __main__ - INFO - Dropped existing table 'provider_data'
+2026-01-08 12:10:55 - __main__ - INFO - Starting upload in chunks of 100,000 rows...
+2026-01-08 12:10:55 - __main__ - INFO - Uploading chunk 1/1 (68,920 rows)...
+2026-01-08 12:15:26 - __main__ - INFO - Chunk 1 completed. Total uploaded: 68,920/68,920 rows (100.0%)
+2026-01-08 12:15:26 - __main__ - INFO - ============================================================
+2026-01-08 12:15:26 - __main__ - INFO - Successfully uploaded 68,920 rows to table 'provider_data'
+2026-01-08 12:15:26 - __main__ - INFO - ============================================================
+2026-01-29 16:01:14 - root - INFO - Loading configuration from: config.yaml
+2026-01-29 16:01:14 - __main__ - ERROR - Filtering is disabled but 'upload_csv' path is not specified in config.
+2026-01-29 16:01:14 - __main__ - DEBUG - Available paths keys: ['input_csv', 'filtered_csv']
+2026-01-29 16:02:41 - root - INFO - Loading configuration from: config.yaml
+2026-01-29 16:02:41 - __main__ - ERROR - Filtering is disabled but 'upload_csv' path is not specified in config.
+2026-01-29 16:02:41 - __main__ - DEBUG - Available paths keys: ['input_csv', 'filtered_csv']
+2026-01-29 16:05:51 - root - INFO - Loading configuration from: config.yaml
+2026-01-29 16:05:51 - __main__ - INFO - Filtering is disabled. Reading CSV file for upload: input/filename.csv
+2026-01-29 16:05:55 - __main__ - INFO - Chunk 1: Read 100,000 rows (total read: 100,000)
+2026-01-29 16:06:00 - __main__ - INFO - Chunk 2: Read 100,000 rows (total read: 200,000)
+2026-01-29 16:06:05 - __main__ - INFO - Chunk 3: Read 100,000 rows (total read: 300,000)
+2026-01-29 16:06:09 - __main__ - INFO - Chunk 4: Read 100,000 rows (total read: 400,000)
+2026-01-29 16:06:13 - __main__ - INFO - Chunk 5: Read 100,000 rows (total read: 500,000)
+2026-01-29 16:06:17 - __main__ - INFO - Chunk 6: Read 100,000 rows (total read: 600,000)
+2026-01-29 16:06:21 - __main__ - INFO - Chunk 7: Read 100,000 rows (total read: 700,000)
+2026-01-29 16:06:25 - __main__ - INFO - Chunk 8: Read 100,000 rows (total read: 800,000)
+2026-01-29 16:06:30 - __main__ - INFO - Chunk 9: Read 100,000 rows (total read: 900,000)
+2026-01-29 16:06:36 - __main__ - INFO - Chunk 10: Read 100,000 rows (total read: 1,000,000)
+2026-01-29 16:06:42 - __main__ - INFO - Chunk 11: Read 100,000 rows (total read: 1,100,000)
+2026-01-29 16:06:47 - __main__ - INFO - Chunk 12: Read 100,000 rows (total read: 1,200,000)
+2026-01-29 16:06:52 - __main__ - INFO - Chunk 13: Read 100,000 rows (total read: 1,300,000)
+2026-01-29 16:06:59 - __main__ - INFO - Chunk 14: Read 100,000 rows (total read: 1,400,000)
+2026-01-29 16:07:05 - __main__ - INFO - Chunk 15: Read 100,000 rows (total read: 1,500,000)
+2026-01-29 16:07:10 - __main__ - INFO - Chunk 16: Read 100,000 rows (total read: 1,600,000)
+2026-01-29 16:07:14 - __main__ - INFO - Chunk 17: Read 100,000 rows (total read: 1,700,000)
+2026-01-29 16:07:18 - __main__ - INFO - Chunk 18: Read 100,000 rows (total read: 1,800,000)
+2026-01-29 16:07:23 - __main__ - INFO - Chunk 19: Read 100,000 rows (total read: 1,900,000)
+2026-01-29 16:07:28 - __main__ - INFO - Chunk 20: Read 100,000 rows (total read: 2,000,000)
+2026-01-29 16:07:33 - __main__ - INFO - Chunk 21: Read 100,000 rows (total read: 2,100,000)
+2026-01-29 16:07:38 - __main__ - INFO - Chunk 22: Read 100,000 rows (total read: 2,200,000)
+2026-01-29 16:07:44 - __main__ - INFO - Chunk 23: Read 100,000 rows (total read: 2,300,000)
+2026-01-29 16:07:50 - __main__ - INFO - Chunk 24: Read 100,000 rows (total read: 2,400,000)
+2026-01-29 16:07:54 - __main__ - INFO - Chunk 25: Read 100,000 rows (total read: 2,500,000)
+2026-01-29 16:08:00 - __main__ - INFO - Chunk 26: Read 100,000 rows (total read: 2,600,000)
+2026-01-29 16:08:05 - __main__ - INFO - Chunk 27: Read 100,000 rows (total read: 2,700,000)
+2026-01-29 16:08:09 - __main__ - INFO - Chunk 28: Read 100,000 rows (total read: 2,800,000)
+2026-01-29 16:08:14 - __main__ - INFO - Chunk 29: Read 100,000 rows (total read: 2,900,000)
+2026-01-29 16:08:19 - __main__ - INFO - Chunk 30: Read 100,000 rows (total read: 3,000,000)
+2026-01-29 16:08:23 - __main__ - INFO - Chunk 31: Read 100,000 rows (total read: 3,100,000)
+2026-01-29 16:08:28 - __main__ - INFO - Chunk 32: Read 100,000 rows (total read: 3,200,000)
+2026-01-29 16:08:34 - __main__ - INFO - Chunk 33: Read 100,000 rows (total read: 3,300,000)
+2026-01-29 16:08:39 - __main__ - INFO - Chunk 34: Read 100,000 rows (total read: 3,400,000)
+2026-01-29 16:08:45 - __main__ - INFO - Chunk 35: Read 100,000 rows (total read: 3,500,000)
+2026-01-29 16:08:50 - __main__ - INFO - Chunk 36: Read 100,000 rows (total read: 3,600,000)
+2026-01-29 16:08:57 - __main__ - INFO - Chunk 37: Read 100,000 rows (total read: 3,700,000)
+2026-01-29 16:09:02 - __main__ - INFO - Chunk 38: Read 100,000 rows (total read: 3,800,000)
+2026-01-29 16:09:08 - __main__ - INFO - Chunk 39: Read 100,000 rows (total read: 3,900,000)
+2026-01-29 16:09:14 - __main__ - INFO - Chunk 40: Read 100,000 rows (total read: 4,000,000)
+2026-01-29 16:09:19 - __main__ - INFO - Chunk 41: Read 100,000 rows (total read: 4,100,000)
+2026-01-29 16:09:24 - __main__ - INFO - Chunk 42: Read 100,000 rows (total read: 4,200,000)
+2026-01-29 16:09:28 - __main__ - INFO - Chunk 43: Read 100,000 rows (total read: 4,300,000)
+2026-01-29 16:09:33 - __main__ - INFO - Chunk 44: Read 100,000 rows (total read: 4,400,000)
+2026-01-29 16:09:38 - __main__ - INFO - Chunk 45: Read 100,000 rows (total read: 4,500,000)
+2026-01-29 16:09:44 - __main__ - INFO - Chunk 46: Read 100,000 rows (total read: 4,600,000)
+2026-01-29 16:09:49 - __main__ - INFO - Chunk 47: Read 100,000 rows (total read: 4,700,000)
+2026-01-29 16:09:54 - __main__ - INFO - Chunk 48: Read 100,000 rows (total read: 4,800,000)
+2026-01-29 16:09:59 - __main__ - INFO - Chunk 49: Read 100,000 rows (total read: 4,900,000)
+2026-01-29 16:10:04 - __main__ - INFO - Chunk 50: Read 100,000 rows (total read: 5,000,000)
+2026-01-29 16:10:12 - __main__ - INFO - Chunk 51: Read 100,000 rows (total read: 5,100,000)
+2026-01-29 16:10:17 - __main__ - INFO - Chunk 52: Read 100,000 rows (total read: 5,200,000)
+2026-01-29 16:10:23 - __main__ - INFO - Chunk 53: Read 100,000 rows (total read: 5,300,000)
+2026-01-29 16:10:28 - __main__ - INFO - Chunk 54: Read 100,000 rows (total read: 5,400,000)
+2026-01-29 16:10:33 - __main__ - INFO - Chunk 55: Read 100,000 rows (total read: 5,500,000)
+2026-01-29 16:10:38 - __main__ - INFO - Chunk 56: Read 100,000 rows (total read: 5,600,000)
+2026-01-29 16:10:42 - __main__ - INFO - Chunk 57: Read 100,000 rows (total read: 5,700,000)
+2026-01-29 16:10:46 - __main__ - INFO - Chunk 58: Read 100,000 rows (total read: 5,800,000)
+2026-01-29 16:10:52 - __main__ - INFO - Chunk 59: Read 100,000 rows (total read: 5,900,000)
+2026-01-29 16:10:57 - __main__ - INFO - Chunk 60: Read 100,000 rows (total read: 6,000,000)
+2026-01-29 16:11:01 - __main__ - INFO - Chunk 61: Read 100,000 rows (total read: 6,100,000)
+2026-01-29 16:11:07 - __main__ - INFO - Chunk 62: Read 100,000 rows (total read: 6,200,000)
+2026-01-29 16:11:12 - __main__ - INFO - Chunk 63: Read 100,000 rows (total read: 6,300,000)
+2026-01-29 16:11:17 - __main__ - INFO - Chunk 64: Read 100,000 rows (total read: 6,400,000)
+2026-01-29 16:11:22 - __main__ - INFO - Chunk 65: Read 100,000 rows (total read: 6,500,000)
+2026-01-29 16:11:26 - __main__ - INFO - Chunk 66: Read 100,000 rows (total read: 6,600,000)
+2026-01-29 16:11:31 - __main__ - INFO - Chunk 67: Read 100,000 rows (total read: 6,700,000)
+2026-01-29 16:11:37 - __main__ - INFO - Chunk 68: Read 100,000 rows (total read: 6,800,000)
+2026-01-29 16:11:43 - __main__ - INFO - Chunk 69: Read 100,000 rows (total read: 6,900,000)
+2026-01-29 16:11:49 - __main__ - INFO - Chunk 70: Read 100,000 rows (total read: 7,000,000)
+2026-01-29 16:12:01 - __main__ - INFO - Chunk 71: Read 100,000 rows (total read: 7,100,000)
+2026-01-29 16:12:11 - __main__ - INFO - Chunk 72: Read 100,000 rows (total read: 7,200,000)
+2026-01-29 16:12:17 - __main__ - INFO - Chunk 73: Read 100,000 rows (total read: 7,300,000)
+2026-01-29 16:12:21 - __main__ - INFO - Chunk 74: Read 100,000 rows (total read: 7,400,000)
+2026-01-29 16:12:27 - __main__ - INFO - Chunk 75: Read 100,000 rows (total read: 7,500,000)
+2026-01-29 16:12:32 - __main__ - INFO - Chunk 76: Read 100,000 rows (total read: 7,600,000)
+2026-01-29 16:12:37 - __main__ - INFO - Chunk 77: Read 100,000 rows (total read: 7,700,000)
+2026-01-29 16:12:43 - __main__ - INFO - Chunk 78: Read 100,000 rows (total read: 7,800,000)
+2026-01-29 16:12:51 - __main__ - INFO - Chunk 79: Read 100,000 rows (total read: 7,900,000)
+2026-01-29 16:12:59 - __main__ - INFO - Chunk 80: Read 100,000 rows (total read: 8,000,000)
+2026-01-29 16:13:04 - __main__ - INFO - Chunk 81: Read 100,000 rows (total read: 8,100,000)
+2026-01-29 16:13:09 - __main__ - INFO - Chunk 82: Read 100,000 rows (total read: 8,200,000)
+2026-01-29 16:13:15 - __main__ - INFO - Chunk 83: Read 100,000 rows (total read: 8,300,000)
+2026-01-29 16:13:23 - __main__ - INFO - Chunk 84: Read 100,000 rows (total read: 8,400,000)
+2026-01-29 16:13:29 - __main__ - INFO - Chunk 85: Read 100,000 rows (total read: 8,500,000)
+2026-01-29 16:13:37 - __main__ - INFO - Chunk 86: Read 100,000 rows (total read: 8,600,000)
+2026-01-29 16:13:44 - __main__ - INFO - Chunk 87: Read 100,000 rows (total read: 8,700,000)
+2026-01-29 16:13:50 - __main__ - INFO - Chunk 88: Read 100,000 rows (total read: 8,800,000)
+2026-01-29 16:13:56 - __main__ - INFO - Chunk 89: Read 100,000 rows (total read: 8,900,000)
+2026-01-29 16:14:04 - __main__ - INFO - Chunk 90: Read 100,000 rows (total read: 9,000,000)
+2026-01-29 16:14:11 - __main__ - INFO - Chunk 91: Read 100,000 rows (total read: 9,100,000)
+2026-01-29 16:14:18 - __main__ - INFO - Chunk 92: Read 100,000 rows (total read: 9,200,000)
+2026-01-29 16:14:23 - __main__ - INFO - Chunk 93: Read 36,343 rows (total read: 9,236,343)
+2026-01-29 16:14:23 - __main__ - INFO - Finished reading all chunks. Total rows read: 9,236,343
+2026-01-29 16:17:56 - __main__ - ERROR - Error reading CSV file: Unable to allocate 70.5 MiB for an array with shape (1, 9236343) and data type object
+2026-01-29 16:17:56 - __main__ - ERROR - Full traceback:
+Traceback (most recent call last):
+  File "C:\Users\ichoi\Documents\Unraveled\ref_data_uploader\npi\process_csv.py", line 128, in read_csv_for_upload
+    df = pd.concat(all_chunks, ignore_index=True)
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\core\reshape\concat.py", line 395, in concat
+    return op.get_result()
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\core\reshape\concat.py", line 684, in get_result
+    new_data = concatenate_managers(
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\core\internals\concat.py", line 189, in concatenate_managers
+    values = _concatenate_join_units(join_units, copy=copy)
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\core\internals\concat.py", line 486, in _concatenate_join_units
+    concat_values = concat_compat(to_concat, axis=1)
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\site-packages\pandas\core\dtypes\concat.py", line 144, in concat_compat
+    result = np.concatenate(to_concat_arrs, axis=axis)
+numpy._core._exceptions._ArrayMemoryError: Unable to allocate 70.5 MiB for an array with shape (1, 9236343) and data type object
+2026-01-29 21:53:13 - __main__ - INFO - Loading configuration from: config.yaml
+2026-01-29 21:53:13 - __main__ - INFO - Connecting to PostgreSQL...
+2026-01-29 21:53:13 - __main__ - INFO - Database connection successful!
+2026-01-29 21:53:13 - __main__ - INFO - Dropped existing table 'provider_data' (if it existed).
+2026-01-29 21:53:13 - __main__ - INFO - Streaming read from: input\filename.csv
+2026-01-29 21:53:13 - __main__ - INFO - Chunk size: 100,000
+2026-01-29 21:53:13 - __main__ - INFO - Filtering enabled: False
+2026-01-29 21:53:13 - __main__ - INFO - DB upload enabled: True (table=provider_data, if_exists=replace)
+2026-01-29 21:53:17 - __main__ - INFO - Chunk 1: read 100,000 rows; kept 100,000 rows (total read 100,000; total kept 100,000)
+2026-01-29 21:55:25 - __main__ - INFO - Chunk 1: uploaded 100,000 rows (total uploaded 100,000)
+2026-01-29 21:55:30 - __main__ - INFO - Chunk 2: read 100,000 rows; kept 100,000 rows (total read 200,000; total kept 200,000)
+2026-01-29 21:56:36 - __main__ - ERROR - DB upload failed on chunk 2: (psycopg2.errors.InvalidTextRepresentation) invalid input syntax for type double precision: "COMMERICAL"
+LINE 1: ...250001', 5.0, 'TN', NULL, '=========', 1.0, 'MS', 'COMMERICA...
+                                                             ^
+
+[SQL: INSERT INTO provider_data ("NPI", "Entity Type Code", "Replacement NPI", "Employer Identification Number (EIN)", "Provider Organization Name (Legal Business Name)", "Provider Last Name (Legal Name)", "Provider First Name", "Provider Middle Name", "Pr ... 1452300 characters truncated ... _Taxonomy_Group_14__98)s, %(Healthcare_Provider_Taxonomy_Group_15__98)s, %(Certification_Date__98)s)]
+[parameters: {'NPI_Reactivation_Date__0': None, 'Other_Provider_Identifier_Type_Code_14__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_5__0': None, 'Other_Provider_Identifier_Type_Code_2__0': None, 'Healthcare_Provider_Taxonomy_Code_15__0': None, 'Other_Provider_Identifier_15__0': None, 'Other_Provider_Identifier_1__0': '064803', 'Healthcare_Provider_Taxonomy_Group_4__0': None, 'Other_Provider_Identifier_13__0': None, 'Other_Provider_Identifier_Issuer_48__0': None, 'Provider_Business_Mailing_Address_City_Name__0': 'WETHERSFIELD', 'Other_Provider_Identifier_Issuer_49__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_8__0': None, 'Other_Provider_Identifier_Type_Code_7__0': None, 'Other_Provider_Identifier_Issuer_1__0': 'CT LICENSE', 'Parent_Organization_TIN__0': None, 'Provider_License_Number_State_Code_10__0': None, 'Provider_Credential_Text__0': 'M.D.', 'Other_Provider_Identifier_Issuer_17__0': None, 'Other_Provider_Identifier_State_32__0': None, 'Provider_Other_Organization_Name__0': None, 'Is_Sole_Proprietor__0': 'N', 'Healthcare_Provider_Taxonomy_Group_15__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_7__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_6__0': None, 'Other_Provider_Identifier_Type_Code_1__0': 1.0, 'Other_Provider_Identifier_State_33__0': None, 'Provider_License_Number_State_Code_12__0': None, 'Provider_License_Number_7__0': None, 'Other_Provider_Identifier_21__0': None, 'Other_Provider_Identifier_Issuer_25__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_14__0': None, 'Provider_Business_Mailing_Address_Postal_Code__0': '061094337', 'Other_Provider_Identifier_Type_Code_28__0': None, 'Other_Provider_Identifier_State_16__0': None, 'Healthcare_Provider_Taxonomy_Group_7__0': None, 'Other_Provider_Identifier_State_24__0': None, 'Other_Provider_Identifier_Issuer_26__0': None, 'Other_Provider_Identifier_State_7__0': None, 'Provider_Business_Practice_Location_Address_Telephone_Number__0': 8606962030.0, 'Other_Provider_Identifier_State_43__0': None, 'Authorized_Official_Credential_Text__0': None, 'Provider_License_Number_10__0': None, 'Other_Provider_Identifier_Issuer_2__0': None, 'Other_Provider_Identifier_State_15__0': None, 'Other_Provider_Identifier_18__0': None, 'Other_Provider_Identifier_Type_Code_39__0': None, 'Other_Provider_Identifier_Issuer_11__0': None, 'Other_Provider_Identifier_State_20__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_13__0': None ... 32570 parameters truncated ... 'Other_Provider_Identifier_State_31__98': None, 'Other_Provider_Identifier_State_13__98': None, 'Other_Provider_Identifier_Issuer_50__98': None, 'Other_Provider_Identifier_State_46__98': None, 'Provider_First_Name__98': 'JOHN', 'Other_Provider_Identifier_Issuer_46__98': None, 'Other_Provider_Identifier_State_48__98': None, 'Other_Provider_Identifier_46__98': None, 'Other_Provider_Identifier_Issuer_6__98': None, 'Other_Provider_Identifier_Type_Code_47__98': None, 'Other_Provider_Identifier_Type_Code_36__98': None, 'Provider_License_Number_State_Code_7__98': None, 'Other_Provider_Identifier_3__98': None, 'Other_Provider_Identifier_30__98': None, 'Other_Provider_Identifier_State_6__98': None, 'Provider_Business_Mailing_Address_Telephone_Number__98': 2104905695.0, 'Provider_Other_Last_Name_Type_Code__98': None, 'Provider_License_Number_1__98': '17587', 'Other_Provider_Identifier_Type_Code_22__98': None, 'Other_Provider_Identifier_State_19__98': None, 'Other_Provider_Identifier_20__98': None, 'Other_Provider_Identifier_State_26__98': None, 'Other_Provider_Identifier_33__98': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_2__98': None, 'Provider_License_Number_State_Code_5__98': None, 'NPI__98': 1023004405, 'Other_Provider_Identifier_Type_Code_13__98': None, 'Provider_Last_Name_ALegal_NameZ__98': 'MCDONALD', 'Other_Provider_Identifier_Type_Code_27__98': None, 'Other_Provider_Identifier_State_5__98': None, 'Provider_License_Number_5__98': None, 'Provider_Business_Practice_Location_Address_City_Name__98': 'RANDOLPH A F B', 'Other_Provider_Identifier_Issuer_44__98': None, 'Other_Provider_Identifier_Issuer_23__98': None, 'Other_Provider_Identifier_Issuer_3__98': None, 'Provider_License_Number_State_Code_8__98': None, 'Other_Provider_Identifier_Issuer_37__98': None, 'Other_Provider_Identifier_State_17__98': None, 'Other_Provider_Identifier_State_18__98': None, 'Other_Provider_Identifier_State_4__98': None, 'Provider_License_Number_13__98': None, 'Other_Provider_Identifier_Issuer_35__98': None, 'Other_Provider_Identifier_Type_Code_11__98': None, 'Provider_Other_Organization_Name_Type_Code__98': None, 'Other_Provider_Identifier_12__98': None, 'Other_Provider_Identifier_23__98': None, 'Other_Provider_Identifier_State_36__98': None, 'Healthcare_Provider_Taxonomy_Group_6__98': None, 'Provider_Name_Prefix_Text__98': 'DR.', 'Other_Provider_Identifier_Issuer_7__98': None}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+2026-01-29 21:56:36 - __main__ - ERROR - Full traceback:
+Traceback (most recent call last):
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2118, in _exec_insertmany_context
+    dialect.do_execute(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.InvalidTextRepresentation: invalid input syntax for type double precision: "COMMERICAL"
+LINE 1: ...250001', 5.0, 'TN', NULL, '=========', 1.0, 'MS', 'COMMERICA...
+                                                             ^
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\ichoi\Documents\Unraveled\ref_data_uploader\npi\process_csv.py", line 375, in stream_csv_to_postgres
+    out.to_sql(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\util\_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\core\generic.py", line 3109, in to_sql
+    return sql.to_sql(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 844, in to_sql
+    return pandas_sql.to_sql(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 2030, in to_sql
+    total_inserted = sql_engine.insert_records(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 1579, in insert_records
+    raise err
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 1570, in insert_records
+    return table.insert(chunksize=chunksize, method=method)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 1121, in insert
+    num_inserted = exec_insert(conn, keys, chunk_iter)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 1012, in _execute_insert
+    result = conn.execute(self.table.insert(), data)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1844, in _execute_context
+    return self._exec_insertmany_context(dialect, context)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2126, in _exec_insertmany_context
+    self._handle_dbapi_exception(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2118, in _exec_insertmany_context
+    dialect.do_execute(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.DataError: (psycopg2.errors.InvalidTextRepresentation) invalid input syntax for type double precision: "COMMERICAL"
+LINE 1: ...250001', 5.0, 'TN', NULL, '=========', 1.0, 'MS', 'COMMERICA...
+                                                             ^
+
+[SQL: INSERT INTO provider_data ("NPI", "Entity Type Code", "Replacement NPI", "Employer Identification Number (EIN)", "Provider Organization Name (Legal Business Name)", "Provider Last Name (Legal Name)", "Provider First Name", "Provider Middle Name", "Pr ... 1452300 characters truncated ... _Taxonomy_Group_14__98)s, %(Healthcare_Provider_Taxonomy_Group_15__98)s, %(Certification_Date__98)s)]
+[parameters: {'NPI_Reactivation_Date__0': None, 'Other_Provider_Identifier_Type_Code_14__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_5__0': None, 'Other_Provider_Identifier_Type_Code_2__0': None, 'Healthcare_Provider_Taxonomy_Code_15__0': None, 'Other_Provider_Identifier_15__0': None, 'Other_Provider_Identifier_1__0': '064803', 'Healthcare_Provider_Taxonomy_Group_4__0': None, 'Other_Provider_Identifier_13__0': None, 'Other_Provider_Identifier_Issuer_48__0': None, 'Provider_Business_Mailing_Address_City_Name__0': 'WETHERSFIELD', 'Other_Provider_Identifier_Issuer_49__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_8__0': None, 'Other_Provider_Identifier_Type_Code_7__0': None, 'Other_Provider_Identifier_Issuer_1__0': 'CT LICENSE', 'Parent_Organization_TIN__0': None, 'Provider_License_Number_State_Code_10__0': None, 'Provider_Credential_Text__0': 'M.D.', 'Other_Provider_Identifier_Issuer_17__0': None, 'Other_Provider_Identifier_State_32__0': None, 'Provider_Other_Organization_Name__0': None, 'Is_Sole_Proprietor__0': 'N', 'Healthcare_Provider_Taxonomy_Group_15__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_7__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_6__0': None, 'Other_Provider_Identifier_Type_Code_1__0': 1.0, 'Other_Provider_Identifier_State_33__0': None, 'Provider_License_Number_State_Code_12__0': None, 'Provider_License_Number_7__0': None, 'Other_Provider_Identifier_21__0': None, 'Other_Provider_Identifier_Issuer_25__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_14__0': None, 'Provider_Business_Mailing_Address_Postal_Code__0': '061094337', 'Other_Provider_Identifier_Type_Code_28__0': None, 'Other_Provider_Identifier_State_16__0': None, 'Healthcare_Provider_Taxonomy_Group_7__0': None, 'Other_Provider_Identifier_State_24__0': None, 'Other_Provider_Identifier_Issuer_26__0': None, 'Other_Provider_Identifier_State_7__0': None, 'Provider_Business_Practice_Location_Address_Telephone_Number__0': 8606962030.0, 'Other_Provider_Identifier_State_43__0': None, 'Authorized_Official_Credential_Text__0': None, 'Provider_License_Number_10__0': None, 'Other_Provider_Identifier_Issuer_2__0': None, 'Other_Provider_Identifier_State_15__0': None, 'Other_Provider_Identifier_18__0': None, 'Other_Provider_Identifier_Type_Code_39__0': None, 'Other_Provider_Identifier_Issuer_11__0': None, 'Other_Provider_Identifier_State_20__0': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_13__0': None ... 32570 parameters truncated ... 'Other_Provider_Identifier_State_31__98': None, 'Other_Provider_Identifier_State_13__98': None, 'Other_Provider_Identifier_Issuer_50__98': None, 'Other_Provider_Identifier_State_46__98': None, 'Provider_First_Name__98': 'JOHN', 'Other_Provider_Identifier_Issuer_46__98': None, 'Other_Provider_Identifier_State_48__98': None, 'Other_Provider_Identifier_46__98': None, 'Other_Provider_Identifier_Issuer_6__98': None, 'Other_Provider_Identifier_Type_Code_47__98': None, 'Other_Provider_Identifier_Type_Code_36__98': None, 'Provider_License_Number_State_Code_7__98': None, 'Other_Provider_Identifier_3__98': None, 'Other_Provider_Identifier_30__98': None, 'Other_Provider_Identifier_State_6__98': None, 'Provider_Business_Mailing_Address_Telephone_Number__98': 2104905695.0, 'Provider_Other_Last_Name_Type_Code__98': None, 'Provider_License_Number_1__98': '17587', 'Other_Provider_Identifier_Type_Code_22__98': None, 'Other_Provider_Identifier_State_19__98': None, 'Other_Provider_Identifier_20__98': None, 'Other_Provider_Identifier_State_26__98': None, 'Other_Provider_Identifier_33__98': None, 'Healthcare_Provider_Primary_Taxonomy_Switch_2__98': None, 'Provider_License_Number_State_Code_5__98': None, 'NPI__98': 1023004405, 'Other_Provider_Identifier_Type_Code_13__98': None, 'Provider_Last_Name_ALegal_NameZ__98': 'MCDONALD', 'Other_Provider_Identifier_Type_Code_27__98': None, 'Other_Provider_Identifier_State_5__98': None, 'Provider_License_Number_5__98': None, 'Provider_Business_Practice_Location_Address_City_Name__98': 'RANDOLPH A F B', 'Other_Provider_Identifier_Issuer_44__98': None, 'Other_Provider_Identifier_Issuer_23__98': None, 'Other_Provider_Identifier_Issuer_3__98': None, 'Provider_License_Number_State_Code_8__98': None, 'Other_Provider_Identifier_Issuer_37__98': None, 'Other_Provider_Identifier_State_17__98': None, 'Other_Provider_Identifier_State_18__98': None, 'Other_Provider_Identifier_State_4__98': None, 'Provider_License_Number_13__98': None, 'Other_Provider_Identifier_Issuer_35__98': None, 'Other_Provider_Identifier_Type_Code_11__98': None, 'Provider_Other_Organization_Name_Type_Code__98': None, 'Other_Provider_Identifier_12__98': None, 'Other_Provider_Identifier_23__98': None, 'Other_Provider_Identifier_State_36__98': None, 'Healthcare_Provider_Taxonomy_Group_6__98': None, 'Provider_Name_Prefix_Text__98': 'DR.', 'Other_Provider_Identifier_Issuer_7__98': None}]
+(Background on this error at: https://sqlalche.me/e/20/9h9h)
+2026-01-29 22:09:57 - __main__ - INFO - Using config: config.yaml
+2026-01-29 22:10:04 - __main__ - INFO - Chunk 1: read 100,000 rows; kept 100,000 rows (total read 100,000; total kept 100,000)
+2026-01-29 22:11:47 - __main__ - INFO - Chunk 2: read 100,000 rows; kept 100,000 rows (total read 200,000; total kept 200,000)
+2026-01-29 22:11:54 - root - ERROR - Fatal error
+Traceback (most recent call last):
+  File "C:\Users\ichoi\Documents\Unraveled\ref_data_uploader\npi\process_csv.py", line 281, in <module>
+    stream_csv_to_postgres(cfg)
+  File "C:\Users\ichoi\Documents\Unraveled\ref_data_uploader\npi\process_csv.py", line 249, in stream_csv_to_postgres
+    out.to_sql(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\util\_decorators.py", line 333, in wrapper
+    return func(*args, **kwargs)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\core\generic.py", line 3109, in to_sql
+    return sql.to_sql(
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 843, in to_sql
+    with pandasSQL_builder(con, schema=schema, need_transaction=True) as pandas_sql:
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\pandas\io\sql.py", line 1657, in __exit__
+    self.exit_stack.close()
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 584, in close
+    self.__exit__(None, None, None)
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 576, in __exit__
+    raise exc_details[1]
+  File "C:\Users\ichoi\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 561, in __exit__
+    if cb(*exc_details):
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\util.py", line 147, in __exit__
+    with util.safe_reraise():
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\util.py", line 145, in __exit__
+    self.commit()
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2632, in commit
+    self._do_commit()
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2737, in _do_commit
+    self._connection_commit_impl()
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2708, in _connection_commit_impl
+    self.connection._commit_impl()
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1147, in _commit_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 2358, in _handle_dbapi_exception
+    raise exc_info[1].with_traceback(exc_info[2])
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 1145, in _commit_impl
+    self.engine.dialect.do_commit(self.connection)
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 581, in connection
+    return self._revalidate_connection()
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 673, in _revalidate_connection
+    self._invalid_transaction()
+  File "C:\Users\ichoi\Documents\notitle\.venv\lib\site-packages\sqlalchemy\engine\base.py", line 663, in _invalid_transaction
+    raise exc.PendingRollbackError(
+sqlalchemy.exc.PendingRollbackError: Can't reconnect until invalid transaction is rolled back.  Please rollback() fully before proceeding (Background on this error at: https://sqlalche.me/e/20/8s2b)
+2026-01-29 22:13:24 - __main__ - INFO - Using config: config.yaml
+2026-01-29 22:13:31 - __main__ - INFO - Chunk 1: read 100,000 rows; kept 100,000 rows (total read 100,000; total kept 100,000)
+2026-01-29 22:15:22 - __main__ - INFO - Chunk 2: read 100,000 rows; kept 100,000 rows (total read 200,000; total kept 200,000)
+2026-01-29 22:17:09 - __main__ - INFO - Chunk 3: read 100,000 rows; kept 100,000 rows (total read 300,000; total kept 300,000)
+2026-01-29 22:18:59 - __main__ - INFO - Chunk 4: read 100,000 rows; kept 100,000 rows (total read 400,000; total kept 400,000)
+2026-01-29 22:20:42 - __main__ - INFO - Chunk 5: read 100,000 rows; kept 100,000 rows (total read 500,000; total kept 500,000)
+2026-01-29 22:22:22 - __main__ - INFO - Chunk 6: read 100,000 rows; kept 100,000 rows (total read 600,000; total kept 600,000)
+2026-01-29 22:24:12 - __main__ - INFO - Chunk 7: read 100,000 rows; kept 100,000 rows (total read 700,000; total kept 700,000)
+2026-01-29 22:26:02 - __main__ - INFO - Chunk 8: read 100,000 rows; kept 100,000 rows (total read 800,000; total kept 800,000)
+2026-01-29 22:27:53 - __main__ - INFO - Chunk 9: read 100,000 rows; kept 100,000 rows (total read 900,000; total kept 900,000)
+2026-01-29 22:29:43 - __main__ - INFO - Chunk 10: read 100,000 rows; kept 100,000 rows (total read 1,000,000; total kept 1,000,000)
+2026-01-29 22:31:33 - __main__ - INFO - Chunk 11: read 100,000 rows; kept 100,000 rows (total read 1,100,000; total kept 1,100,000)
+2026-01-29 22:33:25 - __main__ - INFO - Chunk 12: read 100,000 rows; kept 100,000 rows (total read 1,200,000; total kept 1,200,000)
+2026-01-29 22:35:17 - __main__ - INFO - Chunk 13: read 100,000 rows; kept 100,000 rows (total read 1,300,000; total kept 1,300,000)
+2026-01-29 22:36:53 - __main__ - INFO - Chunk 14: read 100,000 rows; kept 100,000 rows (total read 1,400,000; total kept 1,400,000)
+2026-01-29 22:38:40 - __main__ - INFO - Chunk 15: read 100,000 rows; kept 100,000 rows (total read 1,500,000; total kept 1,500,000)
+2026-01-29 22:40:31 - __main__ - INFO - Chunk 16: read 100,000 rows; kept 100,000 rows (total read 1,600,000; total kept 1,600,000)
+2026-01-29 22:42:16 - __main__ - INFO - Chunk 17: read 100,000 rows; kept 100,000 rows (total read 1,700,000; total kept 1,700,000)
+2026-01-29 22:43:51 - __main__ - INFO - Chunk 18: read 100,000 rows; kept 100,000 rows (total read 1,800,000; total kept 1,800,000)
+2026-01-29 22:45:32 - __main__ - INFO - Chunk 19: read 100,000 rows; kept 100,000 rows (total read 1,900,000; total kept 1,900,000)
+2026-01-29 22:47:21 - __main__ - INFO - Chunk 20: read 100,000 rows; kept 100,000 rows (total read 2,000,000; total kept 2,000,000)
+2026-01-29 22:49:10 - __main__ - INFO - Chunk 21: read 100,000 rows; kept 100,000 rows (total read 2,100,000; total kept 2,100,000)
+2026-01-29 22:51:01 - __main__ - INFO - Chunk 22: read 100,000 rows; kept 100,000 rows (total read 2,200,000; total kept 2,200,000)
+2026-01-29 22:52:46 - __main__ - INFO - Chunk 23: read 100,000 rows; kept 100,000 rows (total read 2,300,000; total kept 2,300,000)
+2026-01-29 22:54:30 - __main__ - INFO - Chunk 24: read 100,000 rows; kept 100,000 rows (total read 2,400,000; total kept 2,400,000)
+2026-01-29 22:56:15 - __main__ - INFO - Chunk 25: read 100,000 rows; kept 100,000 rows (total read 2,500,000; total kept 2,500,000)
+2026-01-29 22:58:00 - __main__ - INFO - Chunk 26: read 100,000 rows; kept 100,000 rows (total read 2,600,000; total kept 2,600,000)
+2026-01-29 22:59:57 - __main__ - INFO - Chunk 27: read 100,000 rows; kept 100,000 rows (total read 2,700,000; total kept 2,700,000)
+2026-01-29 23:01:49 - __main__ - INFO - Chunk 28: read 100,000 rows; kept 100,000 rows (total read 2,800,000; total kept 2,800,000)
+2026-01-29 23:03:48 - __main__ - INFO - Chunk 29: read 100,000 rows; kept 100,000 rows (total read 2,900,000; total kept 2,900,000)
+2026-01-29 23:05:35 - __main__ - INFO - Chunk 30: read 100,000 rows; kept 100,000 rows (total read 3,000,000; total kept 3,000,000)
+2026-01-29 23:07:21 - __main__ - INFO - Chunk 31: read 100,000 rows; kept 100,000 rows (total read 3,100,000; total kept 3,100,000)
+2026-01-29 23:09:06 - __main__ - INFO - Chunk 32: read 100,000 rows; kept 100,000 rows (total read 3,200,000; total kept 3,200,000)
+2026-01-29 23:10:57 - __main__ - INFO - Chunk 33: read 100,000 rows; kept 100,000 rows (total read 3,300,000; total kept 3,300,000)
+2026-01-29 23:12:38 - __main__ - INFO - Chunk 34: read 100,000 rows; kept 100,000 rows (total read 3,400,000; total kept 3,400,000)
+2026-01-29 23:14:13 - __main__ - INFO - Chunk 35: read 100,000 rows; kept 100,000 rows (total read 3,500,000; total kept 3,500,000)
+2026-01-29 23:15:44 - __main__ - INFO - Chunk 36: read 100,000 rows; kept 100,000 rows (total read 3,600,000; total kept 3,600,000)
+2026-01-29 23:17:14 - __main__ - INFO - Chunk 37: read 100,000 rows; kept 100,000 rows (total read 3,700,000; total kept 3,700,000)
+2026-01-29 23:18:45 - __main__ - INFO - Chunk 38: read 100,000 rows; kept 100,000 rows (total read 3,800,000; total kept 3,800,000)
+2026-01-29 23:20:15 - __main__ - INFO - Chunk 39: read 100,000 rows; kept 100,000 rows (total read 3,900,000; total kept 3,900,000)
+2026-01-29 23:21:44 - __main__ - INFO - Chunk 40: read 100,000 rows; kept 100,000 rows (total read 4,000,000; total kept 4,000,000)
+2026-01-29 23:23:13 - __main__ - INFO - Chunk 41: read 100,000 rows; kept 100,000 rows (total read 4,100,000; total kept 4,100,000)
+2026-01-29 23:24:42 - __main__ - INFO - Chunk 42: read 100,000 rows; kept 100,000 rows (total read 4,200,000; total kept 4,200,000)
+2026-01-29 23:26:12 - __main__ - INFO - Chunk 43: read 100,000 rows; kept 100,000 rows (total read 4,300,000; total kept 4,300,000)
+2026-01-29 23:27:44 - __main__ - INFO - Chunk 44: read 100,000 rows; kept 100,000 rows (total read 4,400,000; total kept 4,400,000)
+2026-01-29 23:29:14 - __main__ - INFO - Chunk 45: read 100,000 rows; kept 100,000 rows (total read 4,500,000; total kept 4,500,000)
+2026-01-29 23:30:43 - __main__ - INFO - Chunk 46: read 100,000 rows; kept 100,000 rows (total read 4,600,000; total kept 4,600,000)
+2026-01-29 23:32:11 - __main__ - INFO - Chunk 47: read 100,000 rows; kept 100,000 rows (total read 4,700,000; total kept 4,700,000)
+2026-01-29 23:33:42 - __main__ - INFO - Chunk 48: read 100,000 rows; kept 100,000 rows (total read 4,800,000; total kept 4,800,000)
+2026-01-29 23:35:12 - __main__ - INFO - Chunk 49: read 100,000 rows; kept 100,000 rows (total read 4,900,000; total kept 4,900,000)
+2026-01-29 23:36:43 - __main__ - INFO - Chunk 50: read 100,000 rows; kept 100,000 rows (total read 5,000,000; total kept 5,000,000)
+2026-01-29 23:38:13 - __main__ - INFO - Chunk 51: read 100,000 rows; kept 100,000 rows (total read 5,100,000; total kept 5,100,000)
+2026-01-29 23:39:42 - __main__ - INFO - Chunk 52: read 100,000 rows; kept 100,000 rows (total read 5,200,000; total kept 5,200,000)
+2026-01-29 23:41:12 - __main__ - INFO - Chunk 53: read 100,000 rows; kept 100,000 rows (total read 5,300,000; total kept 5,300,000)
+2026-01-29 23:42:41 - __main__ - INFO - Chunk 54: read 100,000 rows; kept 100,000 rows (total read 5,400,000; total kept 5,400,000)
+2026-01-29 23:44:12 - __main__ - INFO - Chunk 55: read 100,000 rows; kept 100,000 rows (total read 5,500,000; total kept 5,500,000)
+2026-01-29 23:45:44 - __main__ - INFO - Chunk 56: read 100,000 rows; kept 100,000 rows (total read 5,600,000; total kept 5,600,000)
+2026-01-29 23:47:14 - __main__ - INFO - Chunk 57: read 100,000 rows; kept 100,000 rows (total read 5,700,000; total kept 5,700,000)
+2026-01-29 23:48:44 - __main__ - INFO - Chunk 58: read 100,000 rows; kept 100,000 rows (total read 5,800,000; total kept 5,800,000)
+2026-01-29 23:50:15 - __main__ - INFO - Chunk 59: read 100,000 rows; kept 100,000 rows (total read 5,900,000; total kept 5,900,000)
+2026-01-29 23:51:46 - __main__ - INFO - Chunk 60: read 100,000 rows; kept 100,000 rows (total read 6,000,000; total kept 6,000,000)
+2026-01-29 23:53:23 - __main__ - INFO - Chunk 61: read 100,000 rows; kept 100,000 rows (total read 6,100,000; total kept 6,100,000)
+2026-01-29 23:54:53 - __main__ - INFO - Chunk 62: read 100,000 rows; kept 100,000 rows (total read 6,200,000; total kept 6,200,000)
+2026-01-29 23:56:22 - __main__ - INFO - Chunk 63: read 100,000 rows; kept 100,000 rows (total read 6,300,000; total kept 6,300,000)
+2026-01-29 23:57:54 - __main__ - INFO - Chunk 64: read 100,000 rows; kept 100,000 rows (total read 6,400,000; total kept 6,400,000)
+2026-01-29 23:59:24 - __main__ - INFO - Chunk 65: read 100,000 rows; kept 100,000 rows (total read 6,500,000; total kept 6,500,000)
+2026-01-30 00:00:54 - __main__ - INFO - Chunk 66: read 100,000 rows; kept 100,000 rows (total read 6,600,000; total kept 6,600,000)
+2026-01-30 00:02:23 - __main__ - INFO - Chunk 67: read 100,000 rows; kept 100,000 rows (total read 6,700,000; total kept 6,700,000)
+2026-01-30 00:03:52 - __main__ - INFO - Chunk 68: read 100,000 rows; kept 100,000 rows (total read 6,800,000; total kept 6,800,000)
+2026-01-30 00:05:20 - __main__ - INFO - Chunk 69: read 100,000 rows; kept 100,000 rows (total read 6,900,000; total kept 6,900,000)
+2026-01-30 00:06:49 - __main__ - INFO - Chunk 70: read 100,000 rows; kept 100,000 rows (total read 7,000,000; total kept 7,000,000)
+2026-01-30 00:08:18 - __main__ - INFO - Chunk 71: read 100,000 rows; kept 100,000 rows (total read 7,100,000; total kept 7,100,000)
+2026-01-30 00:09:46 - __main__ - INFO - Chunk 72: read 100,000 rows; kept 100,000 rows (total read 7,200,000; total kept 7,200,000)
+2026-01-30 00:11:14 - __main__ - INFO - Chunk 73: read 100,000 rows; kept 100,000 rows (total read 7,300,000; total kept 7,300,000)
+2026-01-30 00:12:44 - __main__ - INFO - Chunk 74: read 100,000 rows; kept 100,000 rows (total read 7,400,000; total kept 7,400,000)
+2026-01-30 00:14:14 - __main__ - INFO - Chunk 75: read 100,000 rows; kept 100,000 rows (total read 7,500,000; total kept 7,500,000)
+2026-01-30 00:15:42 - __main__ - INFO - Chunk 76: read 100,000 rows; kept 100,000 rows (total read 7,600,000; total kept 7,600,000)
+2026-01-30 00:17:11 - __main__ - INFO - Chunk 77: read 100,000 rows; kept 100,000 rows (total read 7,700,000; total kept 7,700,000)
+2026-01-30 00:18:40 - __main__ - INFO - Chunk 78: read 100,000 rows; kept 100,000 rows (total read 7,800,000; total kept 7,800,000)
+2026-01-30 00:20:07 - __main__ - INFO - Chunk 79: read 100,000 rows; kept 100,000 rows (total read 7,900,000; total kept 7,900,000)
+2026-01-30 00:21:34 - __main__ - INFO - Chunk 80: read 100,000 rows; kept 100,000 rows (total read 8,000,000; total kept 8,000,000)
+2026-01-30 00:23:01 - __main__ - INFO - Chunk 81: read 100,000 rows; kept 100,000 rows (total read 8,100,000; total kept 8,100,000)
+2026-01-30 00:24:28 - __main__ - INFO - Chunk 82: read 100,000 rows; kept 100,000 rows (total read 8,200,000; total kept 8,200,000)
+2026-01-30 00:25:56 - __main__ - INFO - Chunk 83: read 100,000 rows; kept 100,000 rows (total read 8,300,000; total kept 8,300,000)
+2026-01-30 00:27:29 - __main__ - INFO - Chunk 84: read 100,000 rows; kept 100,000 rows (total read 8,400,000; total kept 8,400,000)
+2026-01-30 00:28:56 - __main__ - INFO - Chunk 85: read 100,000 rows; kept 100,000 rows (total read 8,500,000; total kept 8,500,000)
+2026-01-30 00:30:24 - __main__ - INFO - Chunk 86: read 100,000 rows; kept 100,000 rows (total read 8,600,000; total kept 8,600,000)
+2026-01-30 00:31:53 - __main__ - INFO - Chunk 87: read 100,000 rows; kept 100,000 rows (total read 8,700,000; total kept 8,700,000)
+2026-01-30 00:33:22 - __main__ - INFO - Chunk 88: read 100,000 rows; kept 100,000 rows (total read 8,800,000; total kept 8,800,000)
+2026-01-30 00:34:49 - __main__ - INFO - Chunk 89: read 100,000 rows; kept 100,000 rows (total read 8,900,000; total kept 8,900,000)
+2026-01-30 00:36:19 - __main__ - INFO - Chunk 90: read 100,000 rows; kept 100,000 rows (total read 9,000,000; total kept 9,000,000)
+2026-01-30 00:37:48 - __main__ - INFO - Chunk 91: read 100,000 rows; kept 100,000 rows (total read 9,100,000; total kept 9,100,000)
+2026-01-30 00:39:17 - __main__ - INFO - Chunk 92: read 100,000 rows; kept 100,000 rows (total read 9,200,000; total kept 9,200,000)
+2026-01-30 00:40:42 - __main__ - INFO - Chunk 93: read 36,343 rows; kept 36,343 rows (total read 9,236,343; total kept 9,236,343)
+2026-01-30 00:41:12 - __main__ - INFO - ============================================================
+2026-01-30 00:41:12 - __main__ - INFO - Streaming complete
+2026-01-30 00:41:12 - __main__ - INFO - Rows read: 9,236,343
+2026-01-30 00:41:12 - __main__ - INFO - Rows kept: 9,236,343
+2026-01-30 00:41:12 - __main__ - INFO - Rows written: 9,236,343
+2026-01-30 00:41:12 - __main__ - INFO - ============================================================

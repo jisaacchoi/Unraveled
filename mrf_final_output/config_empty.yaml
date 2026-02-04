@@ -1,0 +1,45 @@
+# API Server Configuration
+api:
+  host: 
+  port: 
+  workers: # Number of Uvicorn workers
+  max_concurrent_jobs: # Maximum concurrent processing jobs
+
+# Input/Output Directories
+paths:
+  # Base directory containing group subdirectories (group_1, group_2, etc.)
+  # Each group subdirectory contains JSON.gz files and schema.json
+  input_directory: 
+  
+  # Final stage output directory (where all processed results go)
+  final_stage_directory: 
+  
+  # Temporary directory for downloads and intermediate files
+  temp_directory: 
+
+# Processing Configuration
+processing:
+  # Whether to explode service_code arrays
+  explode_service_codes: 
+  
+  # Serverless mode: true = Databricks serverless (no caching), false = dedicated cluster (caching enabled)
+  is_serverless: 
+  
+  # URL Provider Expansion: Enable downloading and processing provider reference URLs
+  # If false, provider URLs will be skipped (may result in missing NPI data)
+  enable_url_expansion: 
+  
+  # Optional: Path to provider CSV file (if not using API-provided NPI filter)
+  provider_data_csv_path: 
+  
+  # Directory for downloading provider reference URLs (if needed)
+  # Required if enable_url_expansion=true and provider references contain URLs
+  download_directory: 
+  
+  # Skip URL downloads (use existing files in download_directory)
+  skip_url_download: 
+
+# Spark Configuration
+spark:
+  app_name: 
+  # Additional Spark config options can be added here

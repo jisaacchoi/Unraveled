@@ -1,0 +1,46 @@
+# Configuration file for CSV filtering and database upload
+
+# Logging configuration
+logging:
+  level:   # Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file:   # Log file path (empty string to disable file logging)
+  console:   # Enable console logging
+  format:   # Log format
+  date_format:   # Date format in logs
+
+# Input/Output paths
+paths:
+  upload_csv:   # Path to input CSV file
+  filtered_csv:   # Path for filtered CSV output (optional)
+
+# Filter configuration
+filter:
+  enabled:   # Set to true to enable filtering
+  column1: 
+  value1:   # Filter rows where this column equals this value
+  value1_ext: 
+  column2: 
+  value2: 
+  value2_ext:   # Filter rows where this column equals this value
+
+# Database configuration
+database:
+  # PostgreSQL connection string
+  # Format: postgresql://user:password@host:port/database
+  # Or use individual components below
+  connection_string: ""  # If provided, this takes precedence over individual components
+  
+  # Alternative: specify components individually (connection_string takes precedence)
+  host: 
+  port: 
+  database: 
+  user: 
+  password: 
+  
+  # Table name to upload data to
+  table_name: 
+  
+  # Upload options
+  upload_enabled:   # Set to true to enable upload after filtering
+  if_exists:   # Options: "fail", "replace", "append"
+

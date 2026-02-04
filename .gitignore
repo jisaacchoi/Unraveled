@@ -1,0 +1,44 @@
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+
+# Environment variables
+.env
+.env.*
+
+# Credentials / keys
+*.pem
+*.key
+*.crt
+
+data/
+*.csv
+*.parquet
+*.feather
+
+**/config.yaml
+**/*.gzi
+
+
+**/*.gzi

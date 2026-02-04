@@ -1,0 +1,65 @@
+WITH tmp1 AS (
+    SELECT plan_name,file_name
+    FROM vw_mrf_reporting_plans
+    WHERE plan_name like '019867 2040 TRAD TX AFFILIATE BODS_BBU'
+)
+,tmp2 AS (
+    SELECT
+		plan_name,
+        original_filename,
+        npi_final,
+		negotiated_type,
+        billing_code,
+        negotiated_rate
+    FROM imaging_merged a
+	inner join tmp1 b
+    	on
+	 	a.original_filename=b.file_name
+      WHERE billing_code = '70551'
+)
+,tmp3 as (
+	select
+		b."NPI",
+	    b."Provider First Line Business Practice Location Address" as addr1,
+	    b."Provider Second Line Business Practice Location Address" as addr2,
+	    b."Provider Business Practice Location Address City Name" as city,
+	    b."Provider Business Practice Location Address State Name" as state,
+	    a.zip2 as zipcode
+		,miles_to_zcta5
+	from
+		zip_code_proximity a
+	inner join
+		provider_data b
+		on
+		left(a.zip2,5)=left(b."Provider Business Practice Location Address Postal Code",5)
+	where a.zip1='60302'
+)
+,tmp4 as (
+	SELECT
+		a.plan_name,
+	    a.original_filename AS file_name,
+	    c.npi_final,
+	    a.billing_code,
+		a.negotiated_type,
+		count(distinct a.negotiated_rate) as count_rates,
+	    avg(a.negotiated_rate) as avg_rates
+	FROM tmp2 a
+	CROSS JOIN LATERAL unnest(a.npi_final) AS c(npi_final)
+	group by
+		a.plan_name,
+	    a.original_filename ,
+	    c.npi_final,
+	    a.billing_code,
+		a.negotiated_type
+)
+select a.*,
+    b.addr1,
+    b.addr2,
+    b.city,
+    b.state,
+    b.zipcode,
+	miles_to_zcta5
+from tmp4 a
+	inner JOIN tmp3 b
+ 	on
+		cast(b."NPI" as bigint) = a.npi_final::bigint

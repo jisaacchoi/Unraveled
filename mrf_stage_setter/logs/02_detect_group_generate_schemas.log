@@ -1,0 +1,203 @@
+2025-12-23 11:13:57 INFO commands.detect_shapes_and_generate_schemas - Using config from config.yaml
+2025-12-23 11:13:57 INFO commands.detect_shapes_and_generate_schemas - Drop table if exists: False
+2025-12-23 11:13:57 INFO commands.detect_shapes_and_generate_schemas - Batch size: 1000, Fetch batch size: 10000
+2025-12-23 11:13:57 INFO commands.detect_shapes_and_generate_schemas - Refresh schema groups: True
+2025-12-23 11:13:57 INFO commands.detect_shapes_and_generate_schemas - Operation flags: detect=True, group=True, generate=False
+2025-12-23 11:13:57 INFO src.mrf_analyzer - Ensured mrf_analysis table exists
+2025-12-23 11:13:57 INFO src.schema_pipeline_helper - === Step 1: Detecting shapes ===
+2025-12-23 11:13:57 INFO src.mrf_analyzer - Analyzing JSON structures from mrf_landing table...
+2025-12-23 11:13:58 INFO src.mrf_analyzer - Executing query to get payloads from mrf_landing table...
+2025-12-23 11:13:58 INFO src.mrf_analyzer - Starting to fetch and process records in batches of 10000...
+2025-12-23 11:13:58 WARNING src.mrf_analyzer - No files were processed. Check if mrf_landing table has data.
+2025-12-23 11:13:58 INFO src.mrf_analyzer - Successfully analyzed structures: 0 analysis records inserted
+2025-12-23 11:13:58 INFO src.mrf_analyzer - Analyzing URLs found in mrf_analysis...
+2025-12-23 11:13:58 INFO src.mrf_analyzer - Finding URLs in mrf_analysis table...
+2025-12-23 11:13:58 INFO src.mrf_analyzer - No URLs found in mrf_analysis table
+2025-12-23 11:13:58 INFO src.mrf_analyzer - Total analysis complete: 0 records from JSON structures, 0 records from URLs
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - Shape analysis complete: 0 records inserted, 0 files analyzed
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - === Step 2: Checking for new schema groups ===
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values before refresh
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - === Step 3: Refreshing schema_groups table ===
+2025-12-23 11:13:58 INFO src.schema_groups_helper - Dropped schema_groups table (refresh requested)
+2025-12-23 11:13:58 INFO src.schema_groups_helper - Created schema_groups table
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - Schema groups table refreshed
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - === Step 3a: Moving non-min files to analyzed directory ===
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - No non-min files to move
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values after refresh
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - === Step 5: Skipping schema generation (disabled) ===
+2025-12-23 11:13:58 INFO src.schema_pipeline_helper - === Step 6: Final cleanup - ensuring all processed files are moved ===
+2025-12-23 11:13:58 INFO commands.detect_shapes_and_generate_schemas - Pipeline completed successfully. No new schemas were generated.
+2025-12-23 11:13:59 INFO commands.detect_shapes_and_generate_schemas - Using config from config.yaml
+2025-12-23 11:13:59 INFO commands.detect_shapes_and_generate_schemas - Drop table if exists: False
+2025-12-23 11:13:59 INFO commands.detect_shapes_and_generate_schemas - Batch size: 1000, Fetch batch size: 10000
+2025-12-23 11:13:59 INFO commands.detect_shapes_and_generate_schemas - Refresh schema groups: True
+2025-12-23 11:13:59 INFO commands.detect_shapes_and_generate_schemas - Operation flags: detect=True, group=True, generate=False
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Ensured mrf_analysis table exists
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - === Step 1: Detecting shapes ===
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Analyzing JSON structures from mrf_landing table...
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Executing query to get payloads from mrf_landing table...
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Starting to fetch and process records in batches of 10000...
+2025-12-23 11:13:59 WARNING src.mrf_analyzer - No files were processed. Check if mrf_landing table has data.
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Successfully analyzed structures: 0 analysis records inserted
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Analyzing URLs found in mrf_analysis...
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Finding URLs in mrf_analysis table...
+2025-12-23 11:13:59 INFO src.mrf_analyzer - No URLs found in mrf_analysis table
+2025-12-23 11:13:59 INFO src.mrf_analyzer - Total analysis complete: 0 records from JSON structures, 0 records from URLs
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - Shape analysis complete: 0 records inserted, 0 files analyzed
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - === Step 2: Checking for new schema groups ===
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values before refresh
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - === Step 3: Refreshing schema_groups table ===
+2025-12-23 11:13:59 INFO src.schema_groups_helper - Dropped schema_groups table (refresh requested)
+2025-12-23 11:13:59 INFO src.schema_groups_helper - Created schema_groups table
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - Schema groups table refreshed
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - === Step 3a: Moving non-min files to analyzed directory ===
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - No non-min files to move
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values after refresh
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - === Step 5: Skipping schema generation (disabled) ===
+2025-12-23 11:13:59 INFO src.schema_pipeline_helper - === Step 6: Final cleanup - ensuring all processed files are moved ===
+2025-12-23 11:13:59 INFO commands.detect_shapes_and_generate_schemas - Pipeline completed successfully. No new schemas were generated.
+2025-12-23 11:16:45 INFO commands.detect_shapes_and_generate_schemas - Using config from config.yaml
+2025-12-23 11:16:45 INFO commands.detect_shapes_and_generate_schemas - Drop table if exists: False
+2025-12-23 11:16:45 INFO commands.detect_shapes_and_generate_schemas - Batch size: 1000, Fetch batch size: 10000
+2025-12-23 11:16:45 INFO commands.detect_shapes_and_generate_schemas - Refresh schema groups: True
+2025-12-23 11:16:45 INFO commands.detect_shapes_and_generate_schemas - Operation flags: detect=True, group=True, generate=False
+2025-12-23 11:16:45 INFO src.mrf_analyzer - Ensured mrf_analysis table exists
+2025-12-23 11:16:45 INFO src.schema_pipeline_helper - === Step 1: Detecting shapes ===
+2025-12-23 11:16:45 INFO src.mrf_analyzer - Analyzing JSON structures from mrf_landing table...
+2025-12-23 11:16:45 INFO src.mrf_analyzer - Executing query to get payloads from mrf_landing table...
+2025-12-23 11:16:45 INFO src.mrf_analyzer - Starting to fetch and process records in batches of 10000...
+2025-12-23 11:16:45 WARNING src.mrf_analyzer - No files were processed. Check if mrf_landing table has data.
+2025-12-23 11:16:45 INFO src.mrf_analyzer - Successfully analyzed structures: 0 analysis records inserted
+2025-12-23 11:16:45 INFO src.mrf_analyzer - Analyzing URLs found in mrf_analysis...
+2025-12-23 11:16:45 INFO src.mrf_analyzer - Finding URLs in mrf_analysis table...
+2025-12-23 11:16:46 INFO src.mrf_analyzer - No URLs found in mrf_analysis table
+2025-12-23 11:16:46 INFO src.mrf_analyzer - Total analysis complete: 0 records from JSON structures, 0 records from URLs
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - Shape analysis complete: 0 records inserted, 0 files analyzed
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - === Step 2: Checking for new schema groups ===
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values before refresh
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - === Step 3: Refreshing schema_groups table ===
+2025-12-23 11:16:46 INFO src.schema_groups_helper - Dropped schema_groups table (refresh requested)
+2025-12-23 11:16:46 INFO src.schema_groups_helper - Created schema_groups table
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - Schema groups table refreshed
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - === Step 3a: Moving non-min files to analyzed directory ===
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - No non-min files to move
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values after refresh
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - === Step 5: Skipping schema generation (disabled) ===
+2025-12-23 11:16:46 INFO src.schema_pipeline_helper - === Step 6: Final cleanup - ensuring all processed files are moved ===
+2025-12-23 11:16:46 INFO commands.detect_shapes_and_generate_schemas - Pipeline completed successfully. No new schemas were generated.
+2025-12-23 11:16:47 INFO commands.detect_shapes_and_generate_schemas - Using config from config.yaml
+2025-12-23 11:16:47 INFO commands.detect_shapes_and_generate_schemas - Drop table if exists: False
+2025-12-23 11:16:47 INFO commands.detect_shapes_and_generate_schemas - Batch size: 1000, Fetch batch size: 10000
+2025-12-23 11:16:47 INFO commands.detect_shapes_and_generate_schemas - Refresh schema groups: True
+2025-12-23 11:16:47 INFO commands.detect_shapes_and_generate_schemas - Operation flags: detect=True, group=True, generate=False
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Ensured mrf_analysis table exists
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - === Step 1: Detecting shapes ===
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Analyzing JSON structures from mrf_landing table...
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Executing query to get payloads from mrf_landing table...
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Starting to fetch and process records in batches of 10000...
+2025-12-23 11:16:47 WARNING src.mrf_analyzer - No files were processed. Check if mrf_landing table has data.
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Successfully analyzed structures: 0 analysis records inserted
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Analyzing URLs found in mrf_analysis...
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Finding URLs in mrf_analysis table...
+2025-12-23 11:16:47 INFO src.mrf_analyzer - No URLs found in mrf_analysis table
+2025-12-23 11:16:47 INFO src.mrf_analyzer - Total analysis complete: 0 records from JSON structures, 0 records from URLs
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - Shape analysis complete: 0 records inserted, 0 files analyzed
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - === Step 2: Checking for new schema groups ===
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values before refresh
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - === Step 3: Refreshing schema_groups table ===
+2025-12-23 11:16:47 INFO src.schema_groups_helper - Dropped schema_groups table (refresh requested)
+2025-12-23 11:16:47 INFO src.schema_groups_helper - Created schema_groups table
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - Schema groups table refreshed
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - === Step 3a: Moving non-min files to analyzed directory ===
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - No non-min files to move
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values after refresh
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - === Step 5: Skipping schema generation (disabled) ===
+2025-12-23 11:16:47 INFO src.schema_pipeline_helper - === Step 6: Final cleanup - ensuring all processed files are moved ===
+2025-12-23 11:16:47 INFO commands.detect_shapes_and_generate_schemas - Pipeline completed successfully. No new schemas were generated.
+2025-12-23 11:16:48 INFO commands.detect_shapes_and_generate_schemas - Using config from config.yaml
+2025-12-23 11:16:48 INFO commands.detect_shapes_and_generate_schemas - Drop table if exists: False
+2025-12-23 11:16:48 INFO commands.detect_shapes_and_generate_schemas - Batch size: 1000, Fetch batch size: 10000
+2025-12-23 11:16:48 INFO commands.detect_shapes_and_generate_schemas - Refresh schema groups: True
+2025-12-23 11:16:48 INFO commands.detect_shapes_and_generate_schemas - Operation flags: detect=True, group=True, generate=False
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Ensured mrf_analysis table exists
+2025-12-23 11:16:48 INFO src.schema_pipeline_helper - === Step 1: Detecting shapes ===
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Analyzing JSON structures from mrf_landing table...
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Executing query to get payloads from mrf_landing table...
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Starting to fetch and process records in batches of 10000...
+2025-12-23 11:16:48 WARNING src.mrf_analyzer - No files were processed. Check if mrf_landing table has data.
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Successfully analyzed structures: 0 analysis records inserted
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Analyzing URLs found in mrf_analysis...
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Finding URLs in mrf_analysis table...
+2025-12-23 11:16:48 INFO src.mrf_analyzer - No URLs found in mrf_analysis table
+2025-12-23 11:16:48 INFO src.mrf_analyzer - Total analysis complete: 0 records from JSON structures, 0 records from URLs
+2025-12-23 11:16:48 INFO src.schema_pipeline_helper - Shape analysis complete: 0 records inserted, 0 files analyzed
+2025-12-23 11:16:48 INFO src.schema_pipeline_helper - === Step 2: Checking for new schema groups ===
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values before refresh
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - === Step 3: Refreshing schema_groups table ===
+2025-12-23 11:16:49 INFO src.schema_groups_helper - Dropped schema_groups table (refresh requested)
+2025-12-23 11:16:49 INFO src.schema_groups_helper - Created schema_groups table
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - Schema groups table refreshed
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - === Step 3a: Moving non-min files to analyzed directory ===
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - No non-min files to move
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values after refresh
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - === Step 5: Skipping schema generation (disabled) ===
+2025-12-23 11:16:49 INFO src.schema_pipeline_helper - === Step 6: Final cleanup - ensuring all processed files are moved ===
+2025-12-23 11:16:49 INFO commands.detect_shapes_and_generate_schemas - Pipeline completed successfully. No new schemas were generated.
+2025-12-23 11:16:50 INFO commands.detect_shapes_and_generate_schemas - Using config from config.yaml
+2025-12-23 11:16:50 INFO commands.detect_shapes_and_generate_schemas - Drop table if exists: False
+2025-12-23 11:16:50 INFO commands.detect_shapes_and_generate_schemas - Batch size: 1000, Fetch batch size: 10000
+2025-12-23 11:16:50 INFO commands.detect_shapes_and_generate_schemas - Refresh schema groups: True
+2025-12-23 11:16:50 INFO commands.detect_shapes_and_generate_schemas - Operation flags: detect=True, group=True, generate=False
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Ensured mrf_analysis table exists
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - === Step 1: Detecting shapes ===
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Analyzing JSON structures from mrf_landing table...
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Executing query to get payloads from mrf_landing table...
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Starting to fetch and process records in batches of 10000...
+2025-12-23 11:16:50 WARNING src.mrf_analyzer - No files were processed. Check if mrf_landing table has data.
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Successfully analyzed structures: 0 analysis records inserted
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Analyzing URLs found in mrf_analysis...
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Finding URLs in mrf_analysis table...
+2025-12-23 11:16:50 INFO src.mrf_analyzer - No URLs found in mrf_analysis table
+2025-12-23 11:16:50 INFO src.mrf_analyzer - Total analysis complete: 0 records from JSON structures, 0 records from URLs
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - Shape analysis complete: 0 records inserted, 0 files analyzed
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - === Step 2: Checking for new schema groups ===
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values before refresh
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - === Step 3: Refreshing schema_groups table ===
+2025-12-23 11:16:50 INFO src.schema_groups_helper - Dropped schema_groups table (refresh requested)
+2025-12-23 11:16:50 INFO src.schema_groups_helper - Created schema_groups table
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - Schema groups table refreshed
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - === Step 3a: Moving non-min files to analyzed directory ===
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - No non-min files to move
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values after refresh
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - === Step 5: Skipping schema generation (disabled) ===
+2025-12-23 11:16:50 INFO src.schema_pipeline_helper - === Step 6: Final cleanup - ensuring all processed files are moved ===
+2025-12-23 11:16:50 INFO commands.detect_shapes_and_generate_schemas - Pipeline completed successfully. No new schemas were generated.
+2025-12-23 11:16:51 INFO commands.detect_shapes_and_generate_schemas - Using config from config.yaml
+2025-12-23 11:16:51 INFO commands.detect_shapes_and_generate_schemas - Drop table if exists: False
+2025-12-23 11:16:51 INFO commands.detect_shapes_and_generate_schemas - Batch size: 1000, Fetch batch size: 10000
+2025-12-23 11:16:51 INFO commands.detect_shapes_and_generate_schemas - Refresh schema groups: True
+2025-12-23 11:16:51 INFO commands.detect_shapes_and_generate_schemas - Operation flags: detect=True, group=True, generate=False
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Ensured mrf_analysis table exists
+2025-12-23 11:16:51 INFO src.schema_pipeline_helper - === Step 1: Detecting shapes ===
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Analyzing JSON structures from mrf_landing table...
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Executing query to get payloads from mrf_landing table...
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Starting to fetch and process records in batches of 10000...
+2025-12-23 11:16:51 WARNING src.mrf_analyzer - No files were processed. Check if mrf_landing table has data.
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Successfully analyzed structures: 0 analysis records inserted
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Analyzing URLs found in mrf_analysis...
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Finding URLs in mrf_analysis table...
+2025-12-23 11:16:51 INFO src.mrf_analyzer - No URLs found in mrf_analysis table
+2025-12-23 11:16:51 INFO src.mrf_analyzer - Total analysis complete: 0 records from JSON structures, 0 records from URLs
+2025-12-23 11:16:51 INFO src.schema_pipeline_helper - Shape analysis complete: 0 records inserted, 0 files analyzed
+2025-12-23 11:16:51 INFO src.schema_pipeline_helper - === Step 2: Checking for new schema groups ===
+2025-12-23 11:16:51 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values before refresh
+2025-12-23 11:16:51 INFO src.schema_pipeline_helper - === Step 3: Refreshing schema_groups table ===
+2025-12-23 11:16:52 INFO src.schema_groups_helper - Dropped schema_groups table (refresh requested)
+2025-12-23 11:16:52 INFO src.schema_groups_helper - Created schema_groups table
+2025-12-23 11:16:52 INFO src.schema_pipeline_helper - Schema groups table refreshed
+2025-12-23 11:16:52 INFO src.schema_pipeline_helper - === Step 3a: Moving non-min files to analyzed directory ===
+2025-12-23 11:16:52 INFO src.schema_pipeline_helper - No non-min files to move
+2025-12-23 11:16:52 INFO src.schema_pipeline_helper - Found 0 unique min_file_name values after refresh
+2025-12-23 11:16:52 INFO src.schema_pipeline_helper - === Step 5: Skipping schema generation (disabled) ===
+2025-12-23 11:16:52 INFO src.schema_pipeline_helper - === Step 6: Final cleanup - ensuring all processed files are moved ===
+2025-12-23 11:16:52 INFO commands.detect_shapes_and_generate_schemas - Pipeline completed successfully. No new schemas were generated.

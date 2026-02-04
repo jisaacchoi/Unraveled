@@ -1,0 +1,64 @@
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Using config from config.yaml
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Batch size: 1000, Fetch batch size: 10000
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Refresh schema groups: True
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Input directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Output directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ready
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Split files enabled: True
+2026-01-24 23:31:30 INFO commands.group_split_schemas -   Chunk size: 1000
+2026-01-24 23:31:30 INFO commands.group_split_schemas -   Min file size (MB): 1000
+2026-01-24 23:31:30 INFO commands.group_split_schemas -   Original files directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ingested\analyzed\grouped\non-split_originals
+2026-01-24 23:31:30 INFO src.schema_orchestrator - === Step 1: Skipping shape detection (disabled) ===
+2026-01-24 23:31:30 INFO src.schema_orchestrator - === Step 2: Checking for new schema groups ===
+2026-01-24 23:31:30 INFO src.schema_orchestrator - Found 0 unique min_file_name values before refresh
+2026-01-24 23:31:30 INFO src.schema_orchestrator - === Step 3: Refreshing schema_groups table ===
+2026-01-24 23:31:30 INFO src.schema_groups_db - Dropped schema_groups table (refresh requested)
+2026-01-24 23:31:30 INFO src.schema_groups_db - Created schema_groups table
+2026-01-24 23:31:30 INFO src.schema_orchestrator - Schema groups table refreshed
+2026-01-24 23:31:30 INFO src.schema_orchestrator - === Moving files after schema grouping ===
+2026-01-24 23:31:30 INFO src.schema_orchestrator - Found 142 file(s) in schema_groups table
+2026-01-24 23:31:30 INFO src.schema_orchestrator - Found 0 file(s) in input directory to move (out of 142 total in groups)
+2026-01-24 23:31:30 WARNING src.schema_orchestrator - No files found in input directory to move. Input directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23
+2026-01-24 23:31:30 INFO src.schema_orchestrator - Found 3 unique min_file_name values after refresh
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Schema groups refreshed successfully.
+2026-01-24 23:31:30 INFO commands.group_split_schemas - === Splitting large JSON.gz files ===
+2026-01-24 23:31:30 INFO src.split.json_splitter - Scanning for JSON.gz files to split...
+2026-01-24 23:31:30 WARNING src.split.json_splitter - No JSON.gz files found in D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ready
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Split complete: 0 file(s) processed, 0 part(s) created
+2026-01-24 23:31:30 INFO commands.group_split_schemas - Original files moved to: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ingested\analyzed\grouped\non-split_originals
+2026-01-24 23:31:30 INFO commands.group_split_schemas - === Generating schema JSON files ===
+2026-01-24 23:31:43 INFO commands.group_split_schemas - Spark session created for schema generation
+2026-01-24 23:31:43 INFO commands.group_split_schemas - Found 0 group subfolder(s) to process for schema generation
+2026-01-24 23:31:43 INFO commands.group_split_schemas - Schema generation complete: 0 schema file(s) created
+2026-01-24 23:31:43 INFO py4j.clientserver - Closing down clientserver connection
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Using config from config.yaml
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Batch size: 1000, Fetch batch size: 10000
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Refresh schema groups: True
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Input directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Output directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ready
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Split files enabled: True
+2026-01-24 23:32:48 INFO commands.group_split_schemas -   Chunk size: 1000
+2026-01-24 23:32:48 INFO commands.group_split_schemas -   Min file size (MB): 1000
+2026-01-24 23:32:48 INFO commands.group_split_schemas -   Original files directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ingested\analyzed\grouped\non-split_originals
+2026-01-24 23:32:48 INFO src.schema_orchestrator - === Step 1: Skipping shape detection (disabled) ===
+2026-01-24 23:32:48 INFO src.schema_orchestrator - === Step 2: Checking for new schema groups ===
+2026-01-24 23:32:48 INFO src.schema_orchestrator - Found 3 unique min_file_name values before refresh
+2026-01-24 23:32:48 INFO src.schema_orchestrator - === Step 3: Refreshing schema_groups table ===
+2026-01-24 23:32:48 INFO src.schema_groups_db - Dropped schema_groups table (refresh requested)
+2026-01-24 23:32:48 INFO src.schema_groups_db - Created schema_groups table
+2026-01-24 23:32:48 INFO src.schema_orchestrator - Schema groups table refreshed
+2026-01-24 23:32:48 INFO src.schema_orchestrator - === Moving files after schema grouping ===
+2026-01-24 23:32:48 INFO src.schema_orchestrator - Found 142 file(s) in schema_groups table
+2026-01-24 23:32:48 INFO src.schema_orchestrator - Found 0 file(s) in input directory to move (out of 142 total in groups)
+2026-01-24 23:32:48 WARNING src.schema_orchestrator - No files found in input directory to move. Input directory: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23
+2026-01-24 23:32:48 INFO src.schema_orchestrator - Found 3 unique min_file_name values after refresh
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Schema groups refreshed successfully.
+2026-01-24 23:32:48 INFO commands.group_split_schemas - === Splitting large JSON.gz files ===
+2026-01-24 23:32:48 INFO src.split.json_splitter - Scanning for JSON.gz files to split...
+2026-01-24 23:32:48 WARNING src.split.json_splitter - No JSON.gz files found in D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ready
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Split complete: 0 file(s) processed, 0 part(s) created
+2026-01-24 23:32:48 INFO commands.group_split_schemas - Original files moved to: D:\payer_mrf\data\Blue-Cross-and-Blue-Shield-of-Illinois\2026-01-23\ingested\analyzed\grouped\non-split_originals
+2026-01-24 23:32:48 INFO commands.group_split_schemas - === Generating schema JSON files ===
+2026-01-24 23:32:59 INFO commands.group_split_schemas - Spark session created for schema generation
+2026-01-24 23:32:59 INFO commands.group_split_schemas - Found 0 group subfolder(s) to process for schema generation
+2026-01-24 23:32:59 INFO commands.group_split_schemas - Schema generation complete: 0 schema file(s) created
+2026-01-24 23:32:59 INFO py4j.clientserver - Closing down clientserver connection

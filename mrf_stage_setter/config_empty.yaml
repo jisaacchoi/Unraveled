@@ -1,0 +1,187 @@
+# MRF Pipeline Configuration File
+# This file configures all stages of the MRF (Machine Readable File) processing pipeline
+
+# Run configuration - defines variables used throughout the config (paths are automatically constructed from these)
+run_config:
+  # Base directory where all data files are stored (used to construct paths automatically)
+  base_directory: 
+  # Run date used in directory paths (format: YYYY-MM-DD, e.g., "2025-11-25")
+  run_date: 
+  # Source/payer identifier used throughout the pipeline for organizing data
+  source_name: 
+  
+# Logging configuration - controls how log messages are formatted and where they are written
+logging:
+  # Log level: DEBUG shows all messages, INFO shows important messages, WARNING/ERROR/CRITICAL show only issues
+  level: 
+  # Format string for log messages: timestamp, PID, level, logger name, and message
+  format: 
+  # Date/time format used in log timestamps
+  datefmt: 
+  
+  # File logging configuration - controls whether logs are written to files or just console
+  file_logging:
+    # If true, logs are written to files; if false, logs only go to console
+    enabled: 
+    # Base directory where log files are stored (relative to project root)
+    log_directory: 
+    # Custom log file paths for each command (overrides default naming if specified)
+    log_files:
+      download: 
+      ingest: 
+      analyze: 
+      gen_schemas: 
+      split: 
+      migrate: 
+
+# Pipeline runner configuration - controls how the pipeline orchestrator manages concurrent steps
+pipeline_runner:
+  # Polling configuration (used by step 1 size checks and steps 2/3 re-runs)
+  # Minutes to wait between polling attempts
+  polling_wait_minutes: 
+  # Number of additional polling attempts after the first run/check (total = 1 + this number)
+  # Use "inf" for infinite polling (runs until interrupted by user)
+  # Used by: Step 1 (size limit polling), Steps 2, 3, 4, and 5 (re-run after completion)
+  polling_num_additional_attempts:   # Total: 1 initial + 100 additional attempts, or use "inf" for infinite
+
+# Data source configuration - where to get the MRF index file that lists all available MRF files
+data_source:
+  # List of URLs to MRF index JSON files (contains metadata about all available MRF files)
+  # Each URL will be downloaded and processed sequentially
+  index_url:
+    # - "https://app0004702110a5prdnc868.blob.core.windows.net/toc/2025-11-21_Blue-Cross-and-Blue-Shield-of-Illinois_index.json"
+  # Alternative: List of local file paths or directories containing index JSON/JSON.gz files
+  # Supports: single .json or .json.gz file, or a directory containing multiple .json/.json.gz files (all files will be processed)
+  # If a directory is provided, all .json and .json.gz files in that directory will be loaded and processed
+  # Both index_url and index_path can be specified - they will be processed sequentially (URLs first, then paths)
+  index_path:
+    - 
+    - 
+
+# Database configuration - PostgreSQL connection settings for storing MRF metadata and analysis results
+database:
+  # Option 1: Full connection string (takes precedence over individual components below)
+  connection_string: ""
+  
+  # Option 2: Individual connection components (used if connection_string is empty)
+  host: 
+  port: 
+  database: 
+  username: 
+  password: 
+  # SSL mode: empty for local PostgreSQL, "require" for Azure PostgreSQL
+  sslmode: 
+
+# Pipeline stage configurations - each stage processes data and passes it to the next stage
+pipeline:
+  # Shared directories for pipeline steps (steps 2, 3, 4)
+  # Input directory: Where files are processed (files are renamed in place with prefixes for steps 2 and 3)
+  input_directory: 
+  # Output directory: Where files are moved after grouping in step 4 (organized into group subfolders)
+  output_directory: 
+
+  storage_directory: 
+  
+  EFS_directory: 
+
+  
+  # STEP 1: Download MRF files from URLs listed in the index file
+  download:
+    # Base directory where downloaded files are stored (automatically constructed from run_config)
+    output_directory: 
+    # Subfolder name within output_directory (automatically uses run_date from run_config)
+    subfolder_name: 
+    # Number of parallel download threads (more threads = faster but more network/disk load)
+    num_threads: 
+    # Chunk size in bytes for streaming downloads (larger = fewer network calls but more memory)
+    chunk_size_bytes: 
+    # Maximum file size in GB (files larger than this are stopped mid-download and deleted)
+    max_file_size_gb: 
+    # Maximum total size in GB for all files in input_directory (if exceeded, download stops and polls)
+    # After each download, checks total size. If exceeds, waits and polls up to polling_num_additional_attempts times
+    # If still exceeds after all polling attempts, stops completely
+    max_total_size_gb:   # Set to a number (e.g., 100.0) to enable, null to disable
+    # Download metadata (URL, filename, status) is tracked in mrf_index database table
+  
+  # STEP 2: Ingest downloaded JSON.gz files into PostgreSQL database
+  ingest:
+    # Maximum number of items to extract from each array in the JSON (prevents memory issues with huge arrays)
+    max_array_items: 
+    # Number of parallel worker processes for file ingestion (1 = sequential, None = auto-detect CPU count, recommended: 2-4)
+    num_workers: 
+    # Files are renamed in place with _ingested_ prefix after successful ingestion (uses pipeline.input_directory)
+    # Batch size for database inserts (larger = faster but more memory usage)
+    # Increased default for better performance (optimization #1)
+    batch_size: 
+    # Chunk size for scanning large files (larger = fewer chunks, less overhead)
+    # Default: 16MB (optimization #3)
+    chunk_size_bytes: 
+    # Maximum span size to read per key (larger = fewer capped reads for large arrays)
+    # Default: 50MB (optimization #8)
+    max_span_size_bytes: 
+    # Number of threads to use for processing keys in parallel (1 = sequential, 2+ = parallel)
+    # Only used when file has 5+ top-level keys (after scan, we know the count)
+    # Default: 1 (sequential, backward compatible). Recommended: 2-4 for files with many keys
+    # Note: Each thread needs its own IndexedGzipFile handle
+    num_key_threads: 
+    # Log progress every N chunks during scanning (0 = disable progress logging)
+    # Default: 5 (logs every 5 chunks)
+    progress_every_chunks: 
+    # If true, automatically create mrf_landing table if it doesn't exist
+    auto_create_tables: 
+    # If true, drop mrf_landing table before creating (WARNING: deletes all data on every run - use False for continuous operation)
+    drop_tables_if_exists: 
+    # Directory path where indexed_gzip index files (.gzi) should be stored
+    # These index files enable fast random access to .json.gz files for large file processing
+    # If not specified (null), indexes are stored next to the .json.gz files with .gzi extension
+    # If a directory path is specified, all index files will be stored in that directory
+    index_path: 
+    # Minimum file size in MB to use indexed_gzip ingestion method for .json.gz files
+    # Files smaller than this threshold will use regular ijson ingestion (faster for small files)
+    # Files >= this threshold will use indexed_gzip (better for large files)
+    # Default: 0 (use indexed_gzip for all .json.gz files)
+    min_file_size_mb_for_indexed_gzip: 
+  
+  # STEP 3: Analyze JSON file structures to detect schema patterns (shape detection)
+  shape_detection:
+    # Files are renamed in place with _analyzed_ prefix after successful analysis (uses pipeline.input_directory)
+    # Batch size for inserting analysis records into mrf_analysis database table
+    insert_batch_size: 
+    # Batch size for fetching rows from database during processing (larger = fewer queries but more memory)
+    fetch_batch_size: 
+    # Maximum number of items to sample from arrays when analyzing structure (analyzer picks the item with most unique keys)
+    max_list_items: 
+    # Maximum number of successful URL downloads to process for structure analysis (None = no limit, recommended: 10 for testing)
+    max_url_downloads: 
+    # If true, drop mrf_analysis table before creating (WARNING: deletes all analysis data on every run - use False for continuous operation)
+    drop_table_if_exists: 
+  
+  # STEP 4: Group files by schema signature and organize into subfolders (does NOT generate schema JSON files)
+  shape_grouping:
+    # Files are moved to pipeline.output_directory and organized into subfolders (group_<hash> by schema_sig)
+    # If true, refresh schema_groups table by dropping and recreating it (if false, uses existing table)
+    refresh_schema_groups: 
+    
+    # Optional: Split large JSON.gz files into smaller chunks after grouping (helps with memory management in downstream processing)
+    split_files:
+      # If true, split files larger than min_file_size_mb_for_indexed_gzip (from ingest config) into multiple smaller files
+      enabled: 
+      # Number of bytes to read per chunk when extracting array items (x)
+      split_chunk_read_bytes: 
+      # Maximum size (in MB) of uncompressed JSON content per part file (y)
+      # Files will be split when cumulative item size reaches this threshold
+      split_size_per_file_mb: 
+      # Number of parallel workers for splitting multiple files (None = auto-detect CPU count - 1, 1 = sequential, >1 = parallel processing)
+      num_workers: 
+      # Number of threads to use for processing arrays in parallel within a single file (1 = sequential, 2+ = parallel)
+      # When a file has multiple arrays (e.g., in_network and provider_references), they can be processed in parallel
+      # Default: 1 (sequential, backward compatible). Recommended: 2-4 for files with multiple arrays
+      num_array_threads: 
+      # If true, log detailed progress for each chunk (iteration, bytes read, items extracted, buffer status, etc.)
+      # If false, only log when buffer reaches threshold and files are written (less verbose)
+      # Default: false (less verbose, only important events)
+      log_chunk_progress: 
+
+    create_schema:
+      enabled: 
+      name: 

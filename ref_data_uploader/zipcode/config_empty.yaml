@@ -1,0 +1,36 @@
+# Configuration file for CSV database upload
+
+# Logging configuration
+logging:
+  level:   # Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  file:   # Log file path (empty string to disable file logging)
+  console:  # Enable console logging
+  format: # Log format
+  date_format: # Date format in logs
+
+# Input/Output paths
+paths:
+  zip_code_proximity_csv:   # Path to zip_code_proximity CSV file
+  zip_zcta_xref_csv:   # Path to zip_zcta_xref CSV file
+
+# Database configuration
+database:
+  # PostgreSQL connection string
+  # Format: postgresql://user:password@host:port/database
+  # Or use individual components below
+  connection_string: ""  # If provided, this takes precedence over individual components
+  
+  # Alternative: specify components individually (connection_string takes precedence)
+  host: 
+  port: 
+  database: 
+  user: 
+  password: 
+  
+  # Table names
+  zip_code_proximity_table: 
+  zip_zcta_xref_table: 
+  
+  # Upload options
+  upload_enabled:   # Set to true to enable upload
+  if_exists:   # Options: "fail", "replace", "append"

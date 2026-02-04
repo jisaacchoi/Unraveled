@@ -1,0 +1,3 @@
+cd  ~/Documents/Unraveled; source .venv/Scripts/activate; 
+cd mrf_stage_setter
+python run_pipeline.py --step 
