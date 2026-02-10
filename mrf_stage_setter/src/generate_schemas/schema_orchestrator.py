@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,10 +12,8 @@ from src.generate_schemas.schema_groups_db import (
     ensure_schema_groups_table,
     get_all_file_names_from_schema_groups,
     get_files_grouped_by_min_file_name,
-    get_files_grouped_by_schema_sig,
     get_non_min_file_names,
     get_unique_min_file_names,
-    hash_schema_sig_to_folder_name,
 )
 
 LOG = logging.getLogger("src.schema_orchestrator")
@@ -40,7 +37,7 @@ def run_full_pipeline(
     """
     Run the full pipeline: detect shapes and refresh schema groups.
     
-    Files are moved and organized into subfolders by schema group after grouping.
+    Files are moved to the output directory after grouping.
     
     Args:
         connection_string: PostgreSQL connection string
@@ -53,7 +50,7 @@ def run_full_pipeline(
         refresh_schema_groups: Whether to refresh schema_groups table
         download_path: Optional directory path for URL downloads (deprecated, kept for compatibility)
         analyzed_directory: Optional directory to move analyzed files to (if None, uses input_directory / "analyzed")
-        files_output_directory: Directory to move files to after grouping (organized into subfolders by schema group)
+        files_output_directory: Directory to move files to after grouping
         enable_detect: If True, run shape detection step
         enable_group: If True, run schema group refresh step
         
@@ -132,9 +129,13 @@ def run_full_pipeline(
                         LOG.info("Files with _ingested_analyzed_ prefix: %d out of %d", prefixed_count, len(actual_files))
                     
                     # Match database file names to actual files
+                    def _normalize_db_file_name(name: str) -> str:
+                        return name[:-5] if name.endswith(".part") else name
+
                     files_to_move = []
                     for db_file_name in files_in_groups:
                         matched = False
+                        normalized_name = _normalize_db_file_name(db_file_name)
                         
                         # Try exact match first
                         if db_file_name in actual_files:
@@ -143,9 +144,15 @@ def run_full_pipeline(
                                 files_to_move.append(db_file_name)
                                 matched = True
                                 continue
+                        if normalized_name in actual_files:
+                            file_path = actual_files[normalized_name]
+                            if has_all_prefixes(file_path, [PREFIX_INGESTED, PREFIX_ANALYZED]):
+                                files_to_move.append(db_file_name)
+                                matched = True
+                                continue
                         
                         # Try with _ingested_analyzed_ prefix (REQUIRED - files must have both prefixes)
-                        prefixed_name = add_prefix(Path(db_file_name), PREFIX_INGESTED)
+                        prefixed_name = add_prefix(Path(normalized_name), PREFIX_INGESTED)
                         prefixed_name = add_prefix(prefixed_name, PREFIX_ANALYZED)
                         if prefixed_name.name in actual_files:
                             file_path = actual_files[prefixed_name.name]
@@ -197,6 +204,7 @@ def run_full_pipeline(
                         # Only map files that have _ingested_analyzed_ prefix (files_to_move already filtered)
                         for db_file_name in files_to_move:
                             matched = False
+                            normalized_name = _normalize_db_file_name(db_file_name)
                             
                             # Try exact match first
                             if db_file_name in actual_files:
@@ -206,9 +214,15 @@ def run_full_pipeline(
                                     file_name_mapping[db_file_name] = file_path
                                     matched = True
                                     continue
+                            if normalized_name in actual_files:
+                                file_path = actual_files[normalized_name]
+                                if has_all_prefixes(file_path, [PREFIX_INGESTED, PREFIX_ANALYZED]):
+                                    file_name_mapping[db_file_name] = file_path
+                                    matched = True
+                                    continue
                             
                             # Try with _ingested_analyzed_ prefix (REQUIRED)
-                            prefixed_name = add_prefix(Path(db_file_name), PREFIX_INGESTED)
+                            prefixed_name = add_prefix(Path(normalized_name), PREFIX_INGESTED)
                             prefixed_name = add_prefix(prefixed_name, PREFIX_ANALYZED)
                             if prefixed_name.name in actual_files:
                                 file_path = actual_files[prefixed_name.name]
@@ -244,213 +258,12 @@ def run_full_pipeline(
                                 LOG.warning("Failed to move file %s to output directory: %s", source_path.name, move_exc)
                                 failed_count += 1
                         
-                        LOG.info("Moved %d file(s) to output directory (%d failed)", 
-                                moved_count, failed_count)
+                        LOG.info(
+                            "Moved %d file(s) to output directory (%d failed)",
+                            moved_count,
+                            failed_count,
+                        )
                         
-                        # Step 3b: Organize files into subfolders by schema group
-                        # Only organize if we successfully moved at least one file
-                        if moved_count > 0 and successfully_moved_files:
-                            # Wait to ensure file system operations have completed
-                            LOG.info("Waiting 10 seconds after moving files to output directory before organizing...")
-                            time.sleep(10)
-                            try:
-                                LOG.info("=== Organizing files into schema group subfolders ===")
-                                file_groups = get_files_grouped_by_schema_sig(connection_string)
-                                
-                                if file_groups:
-                                    LOG.info("Found %d schema group(s) to organize files into", len(file_groups))
-                                    organized_count = 0
-                                    organized_failed = 0
-                                    
-                                    # Create a set of successfully moved files for quick lookup
-                                    moved_files_set = set(successfully_moved_files)
-                                    
-                                    # List all files currently in output directory root (not in subfolders)
-                                    # Files in subfolders are already organized, so we skip them
-                                    actual_files_in_output = set()
-                                    for item in files_output_directory.iterdir():
-                                        if item.is_file():
-                                            actual_files_in_output.add(item.name)
-                                        elif item.is_dir():
-                                            # Check if files are already in subfolders
-                                            LOG.debug("Found existing subfolder: %s", item.name)
-                                    LOG.info("Files currently in output directory root: %d file(s)", len(actual_files_in_output))
-                                    if actual_files_in_output:
-                                        LOG.debug("Files in root: %s", sorted(list(actual_files_in_output)[:10]))
-                                    
-                                    # Use hashed folder names based on schema_sig for deterministic naming
-                                    # This ensures the same schema always maps to the same folder, even when running asynchronously
-                                    for schema_sig, group_files in file_groups.items():
-                                        hashed_folder_name = hash_schema_sig_to_folder_name(schema_sig)
-                                        # Truncate schema_sig for logging (it can be very long)
-                                        schema_sig_preview = schema_sig[:100] + "..." if len(schema_sig) > 100 else schema_sig
-                                        LOG.info("Processing schema group (sig: %s) with %d file(s) -> folder: %s", 
-                                                schema_sig_preview, len(group_files), hashed_folder_name)
-                                        # Create subfolder with hashed name (deterministic based on schema_sig)
-                                        subfolder = files_output_directory / hashed_folder_name
-                                        try:
-                                            subfolder.mkdir(parents=True, exist_ok=True)
-                                            LOG.debug("Created/verified subfolder: %s", subfolder)
-                                            # Wait after folder creation to ensure file system has updated
-                                            LOG.debug("Waiting 10 seconds after creating subfolder %s...", subfolder.name)
-                                            time.sleep(10)
-                                        except Exception as mkdir_exc:  # noqa: BLE001
-                                            LOG.error("Failed to create subfolder %s: %s", subfolder, mkdir_exc)
-                                            continue  # Skip this group if we can't create the folder
-                                        
-                                        # Move files in this group to the subfolder
-                                        # Only process files that were actually moved
-                                        # Note: moved_files_set contains DB file names, but actual files have prefixes
-                                        files_to_organize = [f for f in group_files if f in moved_files_set]
-                                        LOG.info("  Organizing %d file(s) from this group (out of %d total in group)", 
-                                                len(files_to_organize), len(group_files))
-                                        
-                                        # Build mapping of DB file names to actual file names in output directory
-                                        actual_output_files = {f.name: f for f in files_output_directory.iterdir() if f.is_file()}
-                                        db_to_actual_mapping = {}
-                                        for db_file_name in files_to_organize:
-                                            # Try to find the actual file (may have prefixes)
-                                            for actual_name, actual_path in actual_output_files.items():
-                                                # Check if actual file name contains the DB file name (with or without prefixes)
-                                                base_name = db_file_name
-                                                if base_name in actual_name or actual_name.endswith(base_name):
-                                                    db_to_actual_mapping[db_file_name] = actual_path
-                                                    break
-                                        
-                                        for file_name in files_to_organize:
-                                            # Use actual file path if found, otherwise try DB name
-                                            if file_name in db_to_actual_mapping:
-                                                source_path = db_to_actual_mapping[file_name]
-                                            else:
-                                                source_path = files_output_directory / file_name
-                                            
-                                            # Check if file is already in a subfolder (from previous run)
-                                            already_organized = False
-                                            for existing_dir in files_output_directory.iterdir():
-                                                if existing_dir.is_dir():
-                                                    potential_path = existing_dir / file_name
-                                                    if potential_path.exists():
-                                                        LOG.debug("File %s already in subfolder %s, skipping", file_name, existing_dir.name)
-                                                        already_organized = True
-                                                        organized_count += 1  # Count as organized
-                                                        break
-                                            
-                                            if already_organized:
-                                                continue
-                                            
-                                            # Double-check file exists in root before moving
-                                            if source_path.exists() and source_path.is_file():
-                                                dest_path = subfolder / file_name
-                                                # Ensure destination directory exists
-                                                if not dest_path.parent.exists():
-                                                    dest_path.parent.mkdir(parents=True, exist_ok=True)
-                                                
-                                                # Verify destination parent exists before rename
-                                                if not dest_path.parent.exists():
-                                                    LOG.error("Failed to create destination directory: %s", dest_path.parent)
-                                                    organized_failed += 1
-                                                    continue
-                                                
-                                                # Use shutil.move instead of rename for better Windows compatibility
-                                                # Retry logic for file system operations
-                                                max_retries = 3
-                                                retry_delay = 2
-                                                moved = False
-                                                
-                                                # Convert to absolute paths to avoid any path resolution issues
-                                                source_abs = source_path.resolve()
-                                                dest_abs = dest_path.resolve()
-                                                
-                                                for attempt in range(max_retries):
-                                                    try:
-                                                        # Re-check file exists before each attempt
-                                                        if not source_abs.exists():
-                                                            LOG.warning("File %s no longer exists (attempt %d/%d)", 
-                                                                       file_name, attempt + 1, max_retries)
-                                                            break
-                                                        
-                                                        # Verify destination parent exists and is a directory
-                                                        if not dest_abs.parent.exists():
-                                                            LOG.warning("Destination parent does not exist: %s (attempt %d/%d)", 
-                                                                       dest_abs.parent, attempt + 1, max_retries)
-                                                            # Try to create it again
-                                                            dest_abs.parent.mkdir(parents=True, exist_ok=True)
-                                                            time.sleep(2)  # Wait after creating directory
-                                                        
-                                                        if not dest_abs.parent.exists() or not dest_abs.parent.is_dir():
-                                                            LOG.error("Destination parent is not a valid directory: %s", dest_abs.parent)
-                                                            if attempt < max_retries - 1:
-                                                                time.sleep(retry_delay)
-                                                                retry_delay *= 2
-                                                            continue
-                                                        
-                                                        # Use absolute paths with shutil.move
-                                                        shutil.move(str(source_abs), str(dest_abs))
-                                                        
-                                                        organized_count += 1
-                                                        LOG.info("  Organized file: %s -> %s/%s", 
-                                                                file_name, hashed_folder_name, file_name)
-                                                        moved = True
-                                                        break
-                                                    except OSError as os_exc:  # noqa: BLE001
-                                                        winerror = getattr(os_exc, 'winerror', None)
-                                                        errno = getattr(os_exc, 'errno', None)
-                                                        if errno == 2 or winerror == 3:  # File not found
-                                                            if attempt < max_retries - 1:
-                                                                LOG.debug("File move failed - file not found (attempt %d/%d), retrying in %d seconds", 
-                                                                         attempt + 1, max_retries, retry_delay)
-                                                                LOG.debug("  Source: %s (exists: %s)", source_abs, source_abs.exists())
-                                                                LOG.debug("  Dest parent: %s (exists: %s, is_dir: %s)", 
-                                                                         dest_abs.parent, dest_abs.parent.exists(), 
-                                                                         dest_abs.parent.is_dir() if dest_abs.parent.exists() else False)
-                                                                time.sleep(retry_delay)
-                                                                retry_delay *= 2  # Exponential backoff
-                                                                # Re-resolve paths in case something changed
-                                                                source_abs = source_path.resolve()
-                                                                dest_abs = dest_path.resolve()
-                                                            else:
-                                                                LOG.warning("File not found for move after %d attempts: %s", 
-                                                                           max_retries, source_abs)
-                                                                LOG.warning("  Source: %s (exists: %s, is_file: %s)", 
-                                                                           source_abs, source_abs.exists(), 
-                                                                           source_abs.is_file() if source_abs.exists() else False)
-                                                                LOG.warning("  Dest parent: %s (exists: %s, is_dir: %s)", 
-                                                                           dest_abs.parent, dest_abs.parent.exists(),
-                                                                           dest_abs.parent.is_dir() if dest_abs.parent.exists() else False)
-                                                        else:
-                                                            LOG.warning("Failed to organize file %s (attempt %d/%d): %s (errno: %s, winerror: %s)", 
-                                                                       file_name, attempt + 1, max_retries, os_exc, errno, winerror)
-                                                            if attempt < max_retries - 1:
-                                                                time.sleep(retry_delay)
-                                                                retry_delay *= 2
-                                                                source_abs = source_path.resolve()
-                                                                dest_abs = dest_path.resolve()
-                                                    except Exception as org_exc:  # noqa: BLE001
-                                                        LOG.warning("Failed to organize file %s (attempt %d/%d): %s", 
-                                                                   file_name, attempt + 1, max_retries, org_exc)
-                                                        if attempt < max_retries - 1:
-                                                            time.sleep(retry_delay)
-                                                            retry_delay *= 2
-                                                            source_abs = source_path.resolve()
-                                                            dest_abs = dest_path.resolve()
-                                                
-                                                if not moved:
-                                                    organized_failed += 1
-                                                    LOG.warning("  Final check - Source: %s (exists: %s, is_file: %s), Dest parent: %s (exists: %s, is_dir: %s)", 
-                                                               source_abs, source_abs.exists(), 
-                                                               source_abs.is_file() if source_abs.exists() else False,
-                                                               dest_abs.parent, dest_abs.parent.exists(),
-                                                               dest_abs.parent.is_dir() if dest_abs.parent.exists() else False)
-                                            else:
-                                                LOG.debug("File %s not found in output directory root (expected at: %s)", 
-                                                         file_name, source_path)
-                                    
-                                    LOG.info("Organized %d file(s) into schema group subfolders (%d failed)", 
-                                            organized_count, organized_failed)
-                                else:
-                                    LOG.warning("No schema groups found for file organization")
-                            except Exception as org_exc:  # noqa: BLE001
-                                LOG.exception("Error organizing files into schema group subfolders (continuing): %s", org_exc)
                     else:
                         LOG.warning("No files found in input directory to move. Input directory: %s", input_directory)
                 else:
@@ -467,4 +280,3 @@ def run_full_pipeline(
     # Return success status
     # Note: File moving and organization by schema group is handled in Step 3a above
     return 0
-

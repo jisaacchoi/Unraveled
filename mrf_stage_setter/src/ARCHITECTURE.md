@@ -38,8 +38,8 @@ The `src/` directory is organized by pipeline stage to make it clear which modul
 - **`schema_groups_db.py`** - Database operations for `schema_groups` table
   - Queries files grouped by schema signature
   - Hash-based folder naming for deterministic organization
-- **`schema_inference.py`** - Schema inference and file operations for PySpark schemas
-  - Generates PySpark-compatible schema JSON files
+- **`schema_inference.py`** - Schema inference and file operations for schema JSON
+  - Generates schema JSON files from database-derived structure
 - **Used by:** `commands/04_gen_schemas.py`
 
 ### `split/` - Stage 5: File Splitting
@@ -64,10 +64,8 @@ Modules used by multiple commands:
   - Creates/ensures tables exist
   - Used by most commands
 
-- **`spark_session.py`** - SparkSession creation and configuration
-  - Creates Spark sessions for PySpark operations
-  - Handles Windows-specific setup (winutils, Hadoop)
-  - Used by schema generation and Parquet conversion
+- **`spark_session.py`** - Spark utilities (removed)
+  - Spark support has been removed from this project
 
 - **`file_mover.py`** - File movement utilities
   - Moves files between directories
@@ -79,9 +77,8 @@ Modules used by multiple commands:
   - Used by pipeline runner
 
 - **`url_content_downloader.py`** - URL downloading and content joining
-  - Downloads URLs from Parquet data
-  - Joins downloaded content back to DataFrames
-  - Used by Parquet conversion stage
+  - Downloads URLs from row data
+  - Joins downloaded content back to row dictionaries
 
 - **`json_reader.py`** - JSON file reading utilities
   - Opens JSON files (compressed or uncompressed)
@@ -105,7 +102,6 @@ from src.split.indexed_gzip_splitter import split_json_gz_with_indexed_gzip
 # Shared utility imports
 from src.shared.config import load_config, configure_logging
 from src.shared.database import build_connection_string, ensure_table_exists
-from src.shared.spark_session import create_spark_session
 from src.shared.file_prefix import rename_with_prefix, PREFIX_INGESTED
 ```
 
@@ -133,7 +129,6 @@ generate_schemas/schema_orchestrator.py
   → detect_shapes/structure_analyzer.py
   → generate_schemas/schema_groups_db.py
   → generate_schemas/schema_inference.py
-  → shared/spark_session.py
 
 split/indexed_gzip_splitter.py
   → shared/database.py

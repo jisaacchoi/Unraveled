@@ -13,21 +13,21 @@ from typing import Optional
 from pyspark.sql import SparkSession, functions as F, types as T
 from pyspark import StorageLevel
 
-from src.convert.schema_utils import simplify_column_names
-from src.convert.provider_processing import (
+from src.schema_utils import simplify_column_names
+from src.provider_processing import (
     process_provider_references,
     download_and_process_provider_urls,
     load_provider_npis,
 )
-from src.convert.rates_processing import (
+from src.rates_processing import (
     process_in_network_rates,
     join_rates_with_providers,
 )
-from src.convert.filtering import filter_rates_dataframe
-from src.convert.output_writers import convert_to_csv_compatible, write_rates_to_csv
-from src.generate_schemas.schema_inference import load_schema_from_file
+from src.filtering import filter_rates_dataframe
+from src.output_writers import convert_to_csv_compatible, write_rates_to_csv
+from src.schema_inference import load_schema_from_file
 
-LOG = logging.getLogger("src.convert.processor")
+LOG = logging.getLogger("src.processor")
 
 
 def process_json_gz_to_csv(
@@ -276,6 +276,16 @@ def process_json_gz_to_csv(
     # Simplify column names
     LOG.info("Simplifying column names...")
     rates_with_providers = simplify_column_names(rates_with_providers)
+
+    # If NPI is an array (after simplification), explode to one NPI per row
+    try:
+        npi_fields = [f for f in rates_with_providers.schema.fields if "npi" in f.name.lower()]
+        for field in npi_fields:
+            if isinstance(field.dataType, T.ArrayType):
+                LOG.info(f"Exploding NPI array column '{field.name}' to one NPI per row...")
+                rates_with_providers = rates_with_providers.withColumn(field.name, F.explode_outer(F.col(field.name)))
+    except Exception as e:
+        LOG.warning(f"Could not inspect/explode NPI column(s): {e}")
     
     LOG.info("=== EXPLAIN: rates_with_providers after simplification ===")
     rates_with_providers.explain()
@@ -409,7 +419,10 @@ def process_json_gz_to_csv(
         LOG.info(f"  Cached {cache_count:,} rows in memory/disk")
     
     # Use rates_with_providers as fact table (no dimension normalization)
-    fact_df = rates_with_providers
+    # Cast all columns to string to avoid dtype issues and keep filtering consistent
+    fact_df = rates_with_providers.select(
+        [F.col(c).cast("string").alias(c) for c in rates_with_providers.columns]
+    )
     
     # NON-SERVERLESS: Unpersist after processing
     if not is_serverless:

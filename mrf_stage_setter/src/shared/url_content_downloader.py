@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
-from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql import functions as F
 
 from src.download.mrf_downloader import download_file, session_with_retries
 
@@ -55,21 +53,26 @@ def extract_urls_from_value(value: Any) -> List[str]:
     return list(set(normalized_urls))  # Return unique URLs
 
 
-def detect_url_column(df: DataFrame) -> Optional[str]:
+def detect_url_column(rows: List[Dict[str, Any]]) -> Optional[str]:
     """
-    Detect which column in the DataFrame contains URLs.
+    Detect which column in the rows contains URLs.
     
     Checks column names first (looking for 'url' in name), then scans a sample
     of data to find columns containing URL patterns.
     
     Args:
-        df: Spark DataFrame to check
+        rows: List of row dicts to check
         
     Returns:
         Name of column containing URLs, or None if not found
     """
+    if not rows:
+        LOG.warning("No rows provided for URL detection")
+        return None
+
     # First, check if any column name suggests it contains URLs
-    url_like_columns = [col for col in df.columns if "url" in col.lower()]
+    sample_columns = list(rows[0].keys())
+    url_like_columns = [col for col in sample_columns if "url" in col.lower()]
     if url_like_columns:
         LOG.info("Found potential URL columns by name: %s", url_like_columns)
         # Return the first one found
@@ -77,57 +80,47 @@ def detect_url_column(df: DataFrame) -> Optional[str]:
     
     # If no obvious column names, sample data to find URLs
     LOG.info("No URL column names found, sampling data to detect URLs...")
-    # Use a fixed sample size instead of calling count() to avoid triggering execution
-    # that may cause serialization issues with UDFs/broadcast variables
+    sample_size = min(len(rows), 100)
+    for i in range(sample_size):
+        row = rows[i]
+        for key, value in row.items():
+            urls = extract_urls_from_value(value)
+            if urls:
+                LOG.info("Detected URL content in column '%s'", key)
+                return key
     
-    LOG.warning("No URL column detected in DataFrame")
+    LOG.warning("No URL column detected in rows")
     return None
 
 
 def extract_unique_urls_with_row_ids(
-    df: DataFrame,
+    rows: List[Dict[str, Any]],
     url_column: str,
-) -> Tuple[DataFrame, Set[str]]:
+) -> Tuple[List[Dict[str, Any]], Set[str]]:
     """
-    Extract unique URLs from a DataFrame column and add row identifiers.
+    Extract unique URLs from rows and add row identifiers.
     
     Args:
-        df: Spark DataFrame
+        rows: List of row dicts
         url_column: Name of column containing URLs
         
     Returns:
         Tuple of:
-        - DataFrame with row_id and url columns (one row per URL found)
+        - List of dicts with row_id and url (one row per URL found)
         - Set of unique URLs
     """
-    # Add row ID to DataFrame
-    df_with_id = df.withColumn("_row_id", F.monotonically_increasing_id())
+    url_rows: List[Dict[str, Any]] = []
+    unique_urls: Set[str] = set()
     
-    # Extract URLs from the URL column
-    # Use a UDF to extract URLs from each value
-    from pyspark.sql.types import ArrayType, StringType
-    
-    def extract_urls_udf(value):
-        """UDF to extract URLs from a value."""
-        if value is None:
-            return []
+    for row_id, row in enumerate(rows):
+        value = row.get(url_column)
         urls = extract_urls_from_value(value)
-        return urls
+        for url in urls:
+            url_rows.append({"row_id": row_id, "url": url})
+            unique_urls.add(url)
     
-    extract_urls_func = F.udf(extract_urls_udf, ArrayType(StringType()))
-    
-    # Explode URLs into separate rows
-    df_urls = df_with_id.select(
-        "_row_id",
-        F.explode_outer(extract_urls_func(F.col(url_column))).alias("url")
-    ).filter(F.col("url").isNotNull())
-    
-    # Get unique URLs
-    unique_urls = set(df_urls.select("url").distinct().rdd.map(lambda r: r[0]).collect())
-    
-    LOG.info("Extracted %d unique URLs from %d rows", len(unique_urls), df.count())
-    
-    return df_urls, unique_urls
+    LOG.info("Extracted %d unique URLs from %d rows", len(unique_urls), len(rows))
+    return url_rows, unique_urls
 
 
 def download_url_content(
@@ -214,26 +207,21 @@ def load_url_content(url_path: Path) -> Optional[Dict[str, Any]]:
 
 
 def join_url_content_to_dataframe(
-    spark: SparkSession,
-    df: DataFrame,
+    rows: List[Dict[str, Any]],
     url_column: str,
     url_to_path: Dict[str, Path],
-) -> DataFrame:
+) -> List[Dict[str, Any]]:
     """
-    Join downloaded URL content back to the original DataFrame.
+    Join downloaded URL content back to the original rows.
     
     Args:
-        spark: SparkSession
-        df: Original DataFrame
+        rows: Original rows
         url_column: Name of column containing URLs
         url_to_path: Dictionary mapping URLs to local file paths
         
     Returns:
-        DataFrame with URL content joined as a new column
+        Rows with URL content joined as a new column
     """
-    # Add row ID to original DataFrame
-    df_with_id = df.withColumn("_row_id", F.monotonically_increasing_id())
-    
     # Load all URL content into memory (for small to medium datasets)
     # Create a mapping: url -> content
     url_to_content: Dict[str, Dict[str, Any]] = {}
@@ -244,63 +232,20 @@ def join_url_content_to_dataframe(
     
     LOG.info("Loaded content for %d/%d URLs", len(url_to_content), len(url_to_path))
     
-    # Create a DataFrame with URL -> content mapping
+    # Create a rows with URL -> content mapping
     if not url_to_content:
-        LOG.warning("No URL content loaded, returning original DataFrame")
-        return df_with_id.drop("_row_id")
+        LOG.warning("No URL content loaded, returning original rows")
+        return rows
     
-    # Create list of (url, content) tuples for DataFrame creation
-    url_content_data = [(url, json.dumps(content)) for url, content in url_to_content.items()]
+    url_to_content_json = {url: json.dumps(content) for url, content in url_to_content.items()}
     
-    from pyspark.sql.types import StructType, StructField, StringType
-    
-    url_content_schema = StructType([
-        StructField("url", StringType(), False),
-        StructField("url_content", StringType(), True),
-    ])
-    
-    url_content_df = spark.createDataFrame(url_content_data, schema=url_content_schema)
-    
-    # Extract URLs from the URL column and create a joinable structure
-    from pyspark.sql.types import ArrayType
-    
-    def extract_urls_udf(value):
-        """UDF to extract URLs from a value."""
-        if value is None:
-            return []
+    result_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        value = row.get(url_column)
         urls = extract_urls_from_value(value)
-        return urls
+        content_map = {url: url_to_content_json.get(url) for url in urls if url in url_to_content_json}
+        new_row = dict(row)
+        new_row["url_content_map"] = content_map if content_map else None
+        result_rows.append(new_row)
     
-    extract_urls_func = F.udf(extract_urls_udf, ArrayType(StringType()))
-    
-    # Create exploded DataFrame with row_id and url
-    df_urls = df_with_id.select(
-        "_row_id",
-        F.explode_outer(extract_urls_func(F.col(url_column))).alias("url")
-    ).filter(F.col("url").isNotNull())
-    
-    # Join with URL content
-    df_urls_with_content = df_urls.join(
-        url_content_df,
-        on="url",
-        how="left"
-    )
-    
-    # Aggregate URL content back to rows (collect all URLs and their content for each row)
-    # Since a row might have multiple URLs, we'll create a map or array of URL contents
-    df_url_content_agg = df_urls_with_content.groupBy("_row_id").agg(
-        F.map_from_arrays(
-            F.collect_list("url"),
-            F.collect_list("url_content")
-        ).alias("url_content_map")
-    )
-    
-    # Join back to original DataFrame
-    result_df = df_with_id.join(
-        df_url_content_agg,
-        on="_row_id",
-        how="left"
-    ).drop("_row_id")
-    
-    return result_df
-
+    return result_rows

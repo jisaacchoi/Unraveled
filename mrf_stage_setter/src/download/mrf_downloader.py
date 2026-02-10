@@ -824,6 +824,8 @@ def run_download(
     max_file_size_gb: Optional[float] = None,
     max_total_size_gb: Optional[float] = None,
     connection_string: Optional[str] = None,
+    file_pattern: Optional[str] = None,
+    file_url: Optional[str] = None,
 ) -> int:
     """
     Download each MRF url found in the index using optional multi-threading.
@@ -860,13 +862,38 @@ def run_download(
         LOG.info("Processing index file %d/%d...", idx, len(index_json_list))
         file_metadata_list.extend(iter_in_network_urls(index_json))
     
+    # Filter files if pattern or URL is specified
+    if file_url:
+        # Filter by exact URL match
+        original_count = len(file_metadata_list)
+        file_metadata_list = [f for f in file_metadata_list if f.get("url") == file_url]
+        if not file_metadata_list:
+            LOG.error("No file found with URL: %s", file_url)
+            return 1
+        LOG.info("Filtered to 1 file (exact URL match) from %d total files", original_count)
+    elif file_pattern:
+        # Filter by filename or URL pattern (substring match)
+        original_count = len(file_metadata_list)
+        filtered_list = []
+        for f in file_metadata_list:
+            url = f.get("url", "")
+            filename = filename_from_url(url, "")
+            if file_pattern.lower() in url.lower() or file_pattern.lower() in filename.lower():
+                filtered_list.append(f)
+        file_metadata_list = filtered_list
+        if not file_metadata_list:
+            LOG.error("No files found matching pattern: %s", file_pattern)
+            return 1
+        LOG.info("Filtered to %d file(s) matching pattern '%s' from %d total files", 
+                len(file_metadata_list), file_pattern, original_count)
+    
     index_file_count = len(file_metadata_list)
     
     if not file_metadata_list:
         LOG.warning("No in-network URLs found in index")
         return 1
     
-    LOG.info("Found %d in-network file(s) in index file", index_file_count)
+    LOG.info("Found %d in-network file(s) to download", index_file_count)
     LOG.info("Maximum file size limit: %.1f GB", max_file_size_gb)
 
     # Setup database connection for mrf_index table if provided
@@ -1071,21 +1098,43 @@ def run_download(
         LOG.info("Found %d records in mrf_index table for source '%s'", db_count, payer)
         
         # Query for pending downloads (or all if we want to retry failed ones)
-        cursor.execute("""
+        query = """
             SELECT id, file_url, file_name, reporting_entity_name, reporting_entity_type, 
                    file_description, reporting_plans
             FROM mrf_index 
             WHERE source_name = %s 
             AND download_status NOT IN ('completed', 'skipped')
-            ORDER BY id
-        """, (payer,))
+        """
+        params = [payer]
+        
+        # Apply filtering if specified
+        if file_url:
+            query += " AND file_url = %s"
+            params.append(file_url)
+        elif file_pattern:
+            query += " AND (LOWER(file_url) LIKE %s OR LOWER(file_name) LIKE %s)"
+            pattern_like = f"%{file_pattern.lower()}%"
+            params.extend([pattern_like, pattern_like])
+        
+        query += " ORDER BY id"
+        
+        cursor.execute(query, params)
         
         db_records = cursor.fetchall()
         total_urls = len(db_records)
-        LOG.info("Found %d URLs to download from mrf_index table (status: pending or failed)", total_urls)
+        
+        if file_url:
+            LOG.info("Filtered to %d URL(s) matching exact URL from mrf_index table", total_urls)
+        elif file_pattern:
+            LOG.info("Filtered to %d URL(s) matching pattern '%s' from mrf_index table", total_urls, file_pattern)
+        else:
+            LOG.info("Found %d URLs to download from mrf_index table (status: pending or failed)", total_urls)
         
         if total_urls == 0:
-            LOG.info("No pending or failed downloads found in mrf_index. All downloads may already be completed.")
+            if file_url or file_pattern:
+                LOG.error("No matching files found in mrf_index table with the specified filter")
+            else:
+                LOG.info("No pending or failed downloads found in mrf_index. All downloads may already be completed.")
             return 0
         
         # Build url_tasks from database records ONLY

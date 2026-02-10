@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Analyze: Analyze JSON structures from mrf_landing and store in mrf_analysis table.
+Analyze: Comprehensive analysis of JSON structures from mrf_landing.
 
-This command:
-- Analyzes JSON structures from mrf_landing table recursively
-- Stores flattened structure in mrf_analysis table for shape analysis
+This enhanced version processes ALL items for each record_type to build
+comprehensive structure, prioritizing items with rare keys but including
+common items for completeness.
 
 Usage:
-    python commands/03_analyze.py --config config.yaml
+    python commands/03_analyze_comprehensive.py --config config.yaml
 """
 from __future__ import annotations
 
@@ -21,18 +21,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.shared.config import configure_logging, get_log_file_path, load_config
 from src.shared.database import build_connection_string
-from src.detect_shapes.structure_analyzer import (
-    create_mrf_analysis_table,
-    run_shape_analysis,
-)
+from src.detect_shapes.comprehensive_structure_analyzer import run_comprehensive_shape_analysis
+from src.detect_shapes.structure_analyzer import create_mrf_analysis_table
 
-LOG = logging.getLogger("commands.analyze")
+LOG = logging.getLogger("commands.analyze_comprehensive")
 
 
 def main() -> int:
-    """Entrypoint for the analyze command."""
+    """Entrypoint for the comprehensive analyze command."""
     parser = argparse.ArgumentParser(
-        description="Analyze JSON structures from mrf_landing and store in mrf_analysis table"
+        description="Comprehensively analyze JSON structures from mrf_landing (processes all items)"
     )
     parser.add_argument("--config", type=Path, default=Path("config.yaml"), help="Config file path")
     args = parser.parse_args()
@@ -62,10 +60,11 @@ def main() -> int:
     drop_table_if_exists = detect_shapes_cfg.get("drop_table_if_exists", False)
     batch_size = detect_shapes_cfg.get("insert_batch_size", detect_shapes_cfg.get("batch_size", 100))
     fetch_batch_size = detect_shapes_cfg.get("fetch_batch_size", 10000)
-    max_list_items = detect_shapes_cfg.get("max_list_items", 10)  # Number of items to sample from lists
-    max_url_downloads = detect_shapes_cfg.get("max_url_downloads", None)  # Limit successful URL downloads (None = no limit)
+    max_list_items = detect_shapes_cfg.get("max_list_items", 10)
+    max_url_downloads = detect_shapes_cfg.get("max_url_downloads", None)
     url_content_download_path = detect_shapes_cfg.get("url_content_download_path")
-    # Read input_directory from pipeline level, fallback to step level for backward compatibility
+    
+    # Read input_directory from pipeline level, fallback to step level
     input_directory_cfg = pipeline_config.get("input_directory") or detect_shapes_cfg.get("input_directory")
     
     # Convert download path to Path object if provided
@@ -84,23 +83,24 @@ def main() -> int:
     if input_directory:
         LOG.info("Input directory: %s (processing files one at a time for better performance)", input_directory)
     else:
-        LOG.info("No input directory specified (querying all unanalyzed records from mrf_landing)")
+        LOG.error("Input directory is required for comprehensive analysis")
+        return 1
     
     try:
         # Ensure mrf_analysis table exists
         create_mrf_analysis_table(connection_string, drop_if_exists=drop_table_if_exists)
         
-        # Get analyzed directory for file movement (files moved one at a time during analysis)
+        # Get analyzed directory for file movement
         analyzed_directory = None
         analyzed_directory_cfg = detect_shapes_cfg.get("analyzed_directory")
         if analyzed_directory_cfg:
             analyzed_directory = Path(analyzed_directory_cfg)
-            # Ensure analyzed directory exists
             analyzed_directory.mkdir(parents=True, exist_ok=True)
         
-        # Run shape analysis
-        LOG.info("=== Analyzing shapes ===")
-        analysis_result = run_shape_analysis(
+        # Run comprehensive shape analysis
+        LOG.info("=== Running comprehensive shape analysis ===")
+        LOG.info("This will process ALL items for each record_type to build comprehensive structure")
+        analysis_result = run_comprehensive_shape_analysis(
             connection_string=connection_string,
             batch_size=batch_size,
             fetch_batch_size=fetch_batch_size,
@@ -112,11 +112,11 @@ def main() -> int:
         )
         
         if analysis_result[0] < 0:  # Error occurred
-            LOG.error("Shape analysis failed")
+            LOG.error("Comprehensive shape analysis failed")
             return 1
         
         total_records, url_records, processed_files = analysis_result
-        LOG.info("Shape analysis complete: %d records inserted, %d URL records, %d files analyzed", 
+        LOG.info("Comprehensive shape analysis complete: %d records inserted, %d URL records, %d files analyzed",
                  total_records, url_records, len(processed_files))
         
         # Files are renamed with _analyzed_ prefix during analysis
@@ -126,7 +126,7 @@ def main() -> int:
         return 0
     
     except Exception as exc:  # noqa: BLE001
-        LOG.exception("Error running shape detection: %s", exc)
+        LOG.exception("Error running comprehensive shape detection: %s", exc)
         return 1
 
 

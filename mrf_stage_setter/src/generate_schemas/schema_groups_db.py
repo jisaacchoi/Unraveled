@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -81,16 +82,8 @@ def ensure_schema_groups_table(
             
             # Extract the SELECT part from the CREATE TABLE AS statement
             create_sql = load_sql_file("create_schema_groups_table.sql")
-            # The SQL file uses "CREATE TABLE IF NOT EXISTS schema_groups AS" followed by the SELECT
-            # We need to extract just the SELECT part (everything after "AS")
-            if "AS" in create_sql.upper():
-                # Find the AS keyword and get everything after it
-                as_index = create_sql.upper().find("AS")
-                select_part = create_sql[as_index + 2:].strip()  # +2 to skip "AS"
-                # Remove trailing semicolon if present
-                if select_part.endswith(";"):
-                    select_part = select_part[:-1]
-                # Execute INSERT INTO ... SELECT to repopulate
+            select_part = _extract_select_from_create_as(create_sql)
+            if select_part:
                 cursor.execute(f"INSERT INTO schema_groups {select_part}")
                 LOG.info("Refreshed schema_groups table data")
             else:
@@ -104,6 +97,31 @@ def ensure_schema_groups_table(
             cursor.close()
         if conn:
             conn.close()
+
+
+def _extract_select_from_create_as(create_sql: str) -> str | None:
+    """
+    Extract the SELECT statement from a CREATE TABLE AS SQL script.
+    
+    This avoids matching "AS" in comments and ignores trailing statements
+    (e.g., CREATE INDEX). Returns the SELECT clause without the trailing semicolon.
+    """
+    # Collapse whitespace to make matching robust across newlines/indentation
+    normalized = re.sub(r"\s+", " ", create_sql).strip()
+    pattern = re.compile(
+        r"CREATE TABLE IF NOT EXISTS\s+schema_groups\s+AS\s+(?P<select>(?:WITH\b.*?|SELECT\b.*?));",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(normalized)
+    if not match:
+        return None
+    
+    select_part = match.group("select").strip()
+    if not select_part:
+        return None
+    if "SELECT" not in select_part.upper():
+        return None
+    return select_part
 
 
 def get_schema_groups(
@@ -479,4 +497,3 @@ def hash_schema_sig_to_folder_name(schema_sig: str, hash_length: int = 12) -> st
     hash_obj = hashlib.sha256(schema_sig.encode('utf-8'))
     hash_hex = hash_obj.hexdigest()[:hash_length]
     return f"group_{hash_hex}"
-

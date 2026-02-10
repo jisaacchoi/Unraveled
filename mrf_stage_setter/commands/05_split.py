@@ -3,7 +3,7 @@
 Split large JSON.gz files using indexed_gzip for efficient random access.
 
 This command:
-1. Processes files in group subfolders (group_<hash> based on schema_sig) created by commands/04_gen_schemas.py
+1. Processes files in the output directory root created by commands/04_gen_schemas.py
 2. Uses indexed_gzip indexes generated during ingestion
 3. Splits files larger than min_file_size_mb_for_indexed_gzip into smaller parts
 4. Part 000 contains all scalar values (from mrf_analysis)
@@ -40,7 +40,7 @@ def _split_single_file_worker(
     Worker function for multiprocessing - splits a single file.
     
     Args:
-        file_info: Tuple of (file_path_str, group_name, output_dir_str, connection_string, index_path_str, chunk_read_bytes, size_per_file_bytes, min_file_size_mb, file_index, total_files, log_file_path, log_format, log_datefmt, num_array_threads, log_chunk_progress)
+    file_info: Tuple of (file_path_str, output_dir_str, connection_string, index_path_str, chunk_read_bytes, size_per_file_bytes, min_file_size_mb, file_index, total_files, log_file_path, log_format, log_datefmt, num_array_threads, log_chunk_progress)
         Note: Paths are passed as strings for pickling compatibility
         
     Returns:
@@ -49,7 +49,7 @@ def _split_single_file_worker(
         - file_path_str: File path for identification
         - error_message: Error message if failed, empty string if succeeded
     """
-    file_path_str, group_name, output_dir_str, connection_string, index_path_str, chunk_read_bytes, size_per_file_bytes, min_file_size_mb, file_index, total_files, log_file_path, log_format, log_datefmt, num_array_threads, log_chunk_progress = file_info
+    file_path_str, output_dir_str, connection_string, index_path_str, chunk_read_bytes, size_per_file_bytes, min_file_size_mb, file_index, total_files, log_file_path, log_format, log_datefmt, num_array_threads, log_chunk_progress = file_info
     
     # Get process ID for logging identification
     process_id = os.getpid()
@@ -88,7 +88,7 @@ def _split_single_file_worker(
     index_path = Path(index_path_str) if index_path_str else None
     
     try:
-        worker_log.info(f"[PID:{process_id}] [{file_index}/{total_files}] Starting split: {group_name}/{file_path.name}")
+        worker_log.info(f"[PID:{process_id}] [{file_index}/{total_files}] Starting split: {file_path.name}")
         
         # Check file size
         file_size_mb = file_path.stat().st_size / (1024 * 1024)
@@ -186,10 +186,10 @@ def main() -> int:
     LOG.info("Split configuration: chunk_read_bytes=%d, size_per_file=%.1f MB, num_workers=%d, num_array_threads=%d, min_file_size_mb=%.1f",
              chunk_read_bytes, size_per_file_mb, num_workers, num_array_threads, min_file_size_mb)
     
-    # Get input directory (should be the output_directory from gen_schemas, which contains group subfolders)
+    # Get input directory (should be the output_directory from gen_schemas)
     input_directory_cfg = pipeline_config.get("output_directory")
     if not input_directory_cfg:
-        LOG.error("No output_directory in config.pipeline (this should be the directory with group subfolders from gen_schemas)")
+        LOG.error("No output_directory in config.pipeline (this should be the directory from gen_schemas)")
         return 1
     
     input_directory = Path(input_directory_cfg)
@@ -202,35 +202,23 @@ def main() -> int:
         LOG.error("Input path must be a directory: %s", input_directory)
         return 1
     
-    # Find all group subfolders (group_1, group_2, etc.)
-    group_dirs = [d for d in input_directory.iterdir() if d.is_dir() and d.name.startswith("group_")]
-    
-    if not group_dirs:
-        LOG.info("No group subfolders found in %s", input_directory)
-        LOG.info("Note: Group subfolders are created by commands/04_gen_schemas.py")
-        return 0
-    
-    LOG.info("Found %d group subfolder(s) to process", len(group_dirs))
-    
-    # Collect all files to split from all group subfolders
+    # Collect all files to split from the output directory root
     files_to_split = []
-    for group_dir in sorted(group_dirs):
-        # Find .json.gz files in this group folder (exclude already split files with _part prefix)
-        json_gz_files = [
-            f for f in group_dir.iterdir()
-            if f.is_file()
-            and f.name.endswith(".json.gz")
-            and "_part" not in f.name  # Exclude already split files
-        ]
-        
-        for file_path in sorted(json_gz_files):
-            files_to_split.append((file_path, group_dir.name, group_dir))  # (file_path, group_name, output_dir)
+    json_gz_files = [
+        f for f in input_directory.iterdir()
+        if f.is_file()
+        and f.name.endswith(".json.gz")
+        and "_part" not in f.name  # Exclude already split files
+    ]
+    
+    for file_path in sorted(json_gz_files):
+        files_to_split.append((file_path, file_path.parent))  # (file_path, output_dir)
     
     if not files_to_split:
-        LOG.info("No .json.gz files found in group subfolders (excluding already split files)")
+        LOG.info("No .json.gz files found in output directory (excluding already split files)")
         return 0
     
-    LOG.info("Found %d file(s) to split across %d group subfolder(s)", len(files_to_split), len(group_dirs))
+    LOG.info("Found %d file(s) to split in output directory root", len(files_to_split))
     
     # Get log file path for worker processes (log_file already defined above)
     log_file_path = str(log_file) if log_file else None
@@ -245,7 +233,7 @@ def main() -> int:
     
     # Prepare file info tuples for workers
     file_tasks = []
-    for file_index, (file_path, group_name, output_dir) in enumerate(files_to_split, 1):
+    for file_index, (file_path, output_dir) in enumerate(files_to_split, 1):
         # Determine index path for this file
         if index_path_base:
             file_index_path = index_path_base / f"{file_path.name}.gzi"
@@ -254,7 +242,6 @@ def main() -> int:
         
         file_tasks.append((
             str(file_path),  # file_path_str
-            group_name,
             str(output_dir),  # output_dir_str (same as group_dir)
             connection_string,  # connection_string
             str(file_index_path) if file_index_path.exists() else None,  # index_path_str

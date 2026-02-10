@@ -7,9 +7,11 @@ from pydantic import BaseModel, Field
 
 class ConvertRequest(BaseModel):
     """Request model for convert endpoint."""
-    source_file: str = Field(..., description="Name of the JSON.gz file to process")
-    npi_filter: Optional[str] = Field(None, description="Comma-separated list of NPI values")
-    billing_code_filter: Optional[str] = Field(None, description="Comma-separated list of billing codes (can be ranges)")
+    plan_name: str = Field(..., description="Plan name to resolve file_name_core")
+    cpt_code: Optional[str] = Field(None, description="Comma-separated list of CPT codes")
+    zipcode: Optional[str] = Field(
+        None, description="Zipcode to resolve nearby NPIs (optional)"
+    )
 
 
 class ConvertResponse(BaseModel):

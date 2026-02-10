@@ -95,7 +95,7 @@ python commands/03_analyze.py --config config.yaml
 ---
 
 ### `04_gen_schemas.py` - Group Files and Generate Schemas
-Groups files by schema signature and generates PySpark schema JSON files.
+Groups files by schema signature and generates schema JSON files for each file.
 
 **Usage:**
 ```bash
@@ -105,19 +105,19 @@ python commands/04_gen_schemas.py --config config.yaml
 **What it does:**
 1. Refreshes `schema_groups` table from `mrf_analysis` data
 2. Groups files by schema signature (hash-based folder names)
-3. Moves files from input directory to output directory, organized into group subfolders
-4. Generates schema JSON files for each group (if enabled and schema doesn't exist)
+3. Moves files from input directory to output directory root
+4. Moves files without `group_<hash>__` prefixes and generates schema JSON files per file (if enabled)
 
 **Configuration:**
 - `pipeline.shape_grouping.*` - Grouping settings
 - `pipeline.shape_grouping.create_schema.*` - Schema generation settings
 - `pipeline.input_directory` - Source directory (files with `_ingested_analyzed_` prefix)
-- `pipeline.output_directory` - Destination directory (organized into group subfolders)
+- `pipeline.output_directory` - Destination directory (files moved to root without group hash prefixes)
 - `database.*` - PostgreSQL connection settings
 
 **Output:**
-- Files organized into `group_<hash>/` subfolders in output directory
-- Schema JSON files in group folders (if enabled)
+- Files moved to output directory (no group hash prefixes)
+- Schema JSON files in output directory named `<file>_schema.json` (if enabled)
 - Database records in `schema_groups` table
 
 **Features:**
@@ -136,7 +136,7 @@ python commands/05_split.py --config config.yaml
 ```
 
 **What it does:**
-- Processes files in group subfolders created by `04_gen_schemas.py`
+- Processes files in the output directory created by `04_gen_schemas.py`
 - Uses indexed_gzip indexes generated during ingestion
 - Splits files larger than threshold into smaller parts
 - Part 000 contains all scalar values
@@ -144,7 +144,7 @@ python commands/05_split.py --config config.yaml
 
 **Configuration:**
 - `pipeline.shape_grouping.split_files.*` - Split settings (size per file, chunk size, workers, threads)
-- `pipeline.output_directory` - Directory containing group subfolders with files to split
+- `pipeline.output_directory` - Directory containing files to split
 - `database.*` - PostgreSQL connection settings
 
 **Output:**

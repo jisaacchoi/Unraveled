@@ -622,11 +622,13 @@ def ingest_file_indexed_gzip(
         LOG.error("File must be .json.gz: %s", file_path)
         return 1
     
-    if not file_path.name.endswith('.gz'):
+    if not (file_path.name.endswith('.json.gz') or file_path.name.endswith('.json.gz.part')):
         LOG.error("indexed_gzip only works with .json.gz files: %s", file_path)
         return 1
     
     file_name = file_path.name
+    if file_name.endswith(".part"):
+        file_name = file_name[:-5]
     file_size = file_path.stat().st_size
     
     # Determine index path
@@ -639,6 +641,12 @@ def ingest_file_indexed_gzip(
     cursor = None
     
     try:
+        overall_start = time.perf_counter()
+        build_index_time = 0.0
+        scan_time = 0.0
+        process_time = 0.0
+        copy_time = 0.0
+
         LOG.info("Connecting to database...")
         conn = psycopg2.connect(connection_string)
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -654,12 +662,15 @@ def ingest_file_indexed_gzip(
         # Step 1: Build or use existing index
         if not index_path.exists():
             LOG.info("Index file not found, building index...")
+            t0 = time.perf_counter()
             build_and_export_index(str(file_path), str(index_path))
+            build_index_time += time.perf_counter() - t0
         else:
             LOG.info("Using existing index: %s", index_path)
         
         # Step 2: Scan for unique keys
         LOG.info("Scanning for unique (top-level) keys...")
+        t0 = time.perf_counter()
         unique_hits = scan_unique_keys_with_offsets(
             gz_path=str(file_path),
             index_path=str(index_path),
@@ -667,6 +678,7 @@ def ingest_file_indexed_gzip(
             overlap_bytes=overlap_bytes,
             progress_every_chunks=progress_every_chunks,
         )
+        scan_time += time.perf_counter() - t0
         
         if not unique_hits:
             LOG.warning("No unique keys found in %s", file_name)
@@ -692,6 +704,7 @@ def ingest_file_indexed_gzip(
         
         def write_batch_to_db(batch_data: io.StringIO) -> None:
             """Thread-safe function to write a batch of records to database using COPY FROM."""
+            nonlocal copy_time
             batch_data.seek(0)
             content = batch_data.getvalue()
             if not content or len(content.strip()) == 0:
@@ -700,6 +713,7 @@ def ingest_file_indexed_gzip(
             batch_data.seek(0)
             with batch_lock:  # Thread-safe database write
                 try:
+                    copy_start = time.perf_counter()
                     cursor.copy_expert(
                         """
                         COPY mrf_landing(source_name, file_name, file_size, record_type, record_index, payload, payload_size, array_start_offset)
@@ -707,6 +721,7 @@ def ingest_file_indexed_gzip(
                         """,
                         batch_data,
                     )
+                    copy_time += time.perf_counter() - copy_start
                 except Exception as exc:  # noqa: BLE001
                     LOG.exception("Error writing batch to database: %s", exc)
                     raise
@@ -740,6 +755,7 @@ def ingest_file_indexed_gzip(
         
         if num_key_threads == 1:
             # Sequential processing (backward compatible)
+            process_start = time.perf_counter()
             for i, (key_name, hit) in enumerate(targets):
                 start = hit.abs_offset
                 next_key_offset = targets[i + 1][1].abs_offset if i + 1 < len(targets) else None
@@ -762,11 +778,13 @@ def ingest_file_indexed_gzip(
                 )
                 if show_progress:
                     pbar.update(1)
+            process_time += time.perf_counter() - process_start
         else:
             # Parallel processing with ThreadPoolExecutor (optimization #4)
             max_workers = min(num_key_threads, len(targets))
             LOG.info("Using ThreadPoolExecutor with %d worker(s) to process %d key(s) in parallel", max_workers, len(targets))
             
+            process_start = time.perf_counter()
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all tasks
                 future_to_key = {
@@ -801,11 +819,22 @@ def ingest_file_indexed_gzip(
                             LOG.warning("Key '%s' processed but no records created", key_name)
                     except Exception as exc:  # noqa: BLE001
                         LOG.error("Key '%s' failed with exception: %s", key_name, exc, exc_info=True)
+            process_time += time.perf_counter() - process_start
         
         if show_progress:
             pbar.close()
         
         LOG.info("Successfully ingested %d top-level key(s) from %s", record_count, file_name)
+        total_elapsed = time.perf_counter() - overall_start
+        if total_elapsed > 0:
+            LOG.info(
+                "Timing summary: total=%.2fs, build_index=%.2fs (%.1f%%), scan=%.2fs (%.1f%%), process=%.2fs (%.1f%%), copy=%.2fs (%.1f%%)",
+                total_elapsed,
+                build_index_time, 100.0 * build_index_time / total_elapsed,
+                scan_time, 100.0 * scan_time / total_elapsed,
+                process_time, 100.0 * process_time / total_elapsed,
+                copy_time, 100.0 * copy_time / total_elapsed,
+            )
         return 0
     
     except Exception as exc:  # noqa: BLE001

@@ -31,8 +31,8 @@ CONFIG_PATH = Path("config.yaml")
 
 # Step definitions with descriptive names
 STEP1 = [sys.executable, "commands/01_download.py", "--config", "config.yaml"]  # Download MRF files from index URL
-STEP2 = [sys.executable, "commands/02_ingest.py", "--config", "config.yaml"]  # Ingest MRF JSON files into PostgreSQL
-STEP3 = [sys.executable, "commands/03_analyze.py", "--config", "config.yaml"]  # Analyze JSON structures from mrf_landing
+STEP2 = [sys.executable, "commands/02_ingest.py", "--config", "config.yaml"]  # Ingest MRF JSON files into PostgreSQL (with rare key detection)
+STEP3 = [sys.executable, "commands/03_analyze.py", "--config", "config.yaml"]  # Analyze JSON structures from mrf_landing (comprehensive analysis)
 STEP4 = [sys.executable, "commands/04_gen_schemas.py", "--config", "config.yaml"]  # Group schemas (refresh schema_groups table)
 STEP5 = [sys.executable, "commands/05_split.py", "--config", "config.yaml"]  # Split large JSON.gz files into smaller parts
 # Step descriptions

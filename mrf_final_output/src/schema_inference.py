@@ -14,8 +14,10 @@ from pyspark.sql.types import (
     DoubleType, BooleanType, ArrayType, MapType, NullType
 )
 
-import psycopg2
-from src.generate_schemas.schema_groups_db import get_schema_groups
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import psycopg2  # pragma: no cover
 
 LOG = logging.getLogger("src.schema_inference")
 
@@ -142,6 +144,14 @@ def generate_and_save_schemas(
         Tuple of (dictionary mapping min_file_name to schema file path, list of processed min_file_names)
     """
     # Get schema groups from database
+    try:
+        from src.schema_groups_db import get_schema_groups  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        raise ImportError(
+            "schema_groups_db module not available. "
+            "This repo expects src/schema_groups_db.py for schema group access."
+        ) from exc
+
     schema_groups = get_schema_groups(connection_string, refresh=refresh_schema_groups)
     
     if not schema_groups:
@@ -192,7 +202,13 @@ def generate_and_save_schemas(
             
             # Convert .json.gz to temporary NDJSON
             LOG.info("Converting %s to temporary NDJSON format for schema inference...", min_file_name)
-            from src.convert.json_to_ndjson import convert_json_gz_to_ndjson  # noqa: PLC0415
+            try:
+                from src.json_to_ndjson import convert_json_gz_to_ndjson  # type: ignore # noqa: PLC0415
+            except Exception as exc:  # noqa: BLE001
+                raise ImportError(
+                    "json_to_ndjson module not available. "
+                    "This repo expects src/json_to_ndjson.py for conversion."
+                ) from exc
             result = convert_json_gz_to_ndjson(
                 input_path=min_file_gz_path,
                 output_path=temp_ndjson_path,
@@ -238,7 +254,13 @@ def generate_and_save_schemas(
                 # Move min_file to analyzed_directory even if schema already existed
                 if analyzed_directory:
                     try:
-                        from src.shared.file_mover import move_files_to_analyzed
+                        try:
+                            from src.file_mover import move_files_to_analyzed  # type: ignore
+                        except Exception as exc:  # noqa: BLE001
+                            raise ImportError(
+                                "file_mover module not available. "
+                                "This repo expects src/file_mover.py for analyzed file moves."
+                            ) from exc
                         moved_count, failed_count = move_files_to_analyzed(
                             input_directory, [min_file_name], analyzed_directory
                         )
@@ -263,7 +285,13 @@ def generate_and_save_schemas(
             # Move min_file to analyzed_directory immediately after schema is generated
             if analyzed_directory:
                 try:
-                    from src.shared.file_mover import move_files_to_analyzed
+                    try:
+                        from src.file_mover import move_files_to_analyzed  # type: ignore
+                    except Exception as exc:  # noqa: BLE001
+                        raise ImportError(
+                            "file_mover module not available. "
+                            "This repo expects src/file_mover.py for analyzed file moves."
+                        ) from exc
                     moved_count, failed_count = move_files_to_analyzed(
                         input_directory, [min_file_name], analyzed_directory
                     )
@@ -393,6 +421,13 @@ def generate_schema_from_mrf_landing(
     Returns:
         PySpark StructType schema, or None if file not found
     """
+    try:
+        import psycopg2  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        raise ImportError(
+            "psycopg2 is required for generate_schema_from_mrf_landing but is not installed."
+        ) from exc
+
     conn = None
     cursor = None
     
@@ -559,4 +594,3 @@ def generate_schema_for_group(
     
     LOG.info("Schema saved successfully: %s", schema_path)
     return schema_path
-

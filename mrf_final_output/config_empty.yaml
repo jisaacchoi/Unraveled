@@ -17,6 +17,12 @@ paths:
   # Temporary directory for downloads and intermediate files
   temp_directory: 
 
+  # Directory where plan-specific MRF files are downloaded
+  plan_download_directory: 
+
+  # Directories to scan for structure.json marker files
+  structure_json_directories:
+
 # Processing Configuration
 processing:
   # Whether to explode service_code arrays
@@ -39,7 +45,24 @@ processing:
   # Skip URL downloads (use existing files in download_directory)
   skip_url_download: 
 
+  # Enable downloading plan files based on mrf_index.file_url
+  enable_plan_download: 
+  plan_download_chunk_size_bytes: 
+
 # Spark Configuration
 spark:
   app_name: 
   # Additional Spark config options can be added here
+
+# Split configuration (integrated from split/config.yaml)
+pipeline:
+  split_files:
+    enabled: 
+    # Directory path where indexed_gzip index files (.gzi) should be stored
+    index_path: 
+    # Minimum file size in MB to use indexed_gzip splitting
+    min_file_size_mb_for_indexed_gzip: 
+    split_chunk_read_bytes: 
+    split_size_per_file_mb: 
+    num_array_threads: 
+    log_chunk_progress: 

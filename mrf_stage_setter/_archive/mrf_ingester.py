@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import sys
+import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional, Tuple
@@ -275,6 +276,8 @@ def ingest_file_python(
         return 1
     
     file_name = file_path.name
+    if file_name.endswith(".part"):
+        file_name = file_name[:-5]
     # Get file size in bytes
     file_size = file_path.stat().st_size
     LOG.debug("File size: %d bytes (%.2f MB)", file_size, file_size / (1024 * 1024))
@@ -283,6 +286,12 @@ def ingest_file_python(
     cursor = None
     
     try:
+        overall_start = time.perf_counter()
+        extract_time = 0.0
+        json_time = 0.0
+        csv_time = 0.0
+        copy_time = 0.0
+
         LOG.info("Connecting to database...")
         conn = psycopg2.connect(connection_string)
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -315,6 +324,7 @@ def ingest_file_python(
         
         def write_batch_to_db(batch_data: io.StringIO) -> None:
             """Write a batch of records to database using COPY FROM."""
+            nonlocal copy_time
             LOG.debug("write_batch_to_db: Starting...")
             # Get buffer size by checking current position
             current_pos = batch_data.tell()
@@ -338,6 +348,7 @@ def ingest_file_python(
             
             try:
                 LOG.info("Executing COPY FROM to write batch to database (buffer size: %d bytes)...", content_size)
+                copy_start = time.perf_counter()
                 cursor.copy_expert(
                     """
                     COPY mrf_landing(source_name, file_name, file_size, record_type, record_index, payload, payload_size)
@@ -345,6 +356,7 @@ def ingest_file_python(
                     """,
                     batch_data,
                 )
+                copy_time += time.perf_counter() - copy_start
                 LOG.info("COPY FROM completed successfully")
             except Exception as exc:  # noqa: BLE001
                 LOG.exception("Error writing batch to database (buffer size: %d bytes): %s", content_size, exc)
@@ -358,7 +370,14 @@ def ingest_file_python(
         try:
             LOG.info("Starting to iterate over records from extract_all_records()...")
             records_extracted = 0
-            for record_type, record_index, record in extract_all_records(file_path, max_array_items=max_array_items):
+            record_iter = extract_all_records(file_path, max_array_items=max_array_items)
+            while True:
+                extract_start = time.perf_counter()
+                try:
+                    record_type, record_index, record = next(record_iter)
+                except StopIteration:
+                    break
+                extract_time += time.perf_counter() - extract_start
                 records_extracted += 1
                 
                 if records_extracted == 1:
@@ -369,9 +388,11 @@ def ingest_file_python(
                 
                 # Convert Decimal objects to float for JSON serialization
                 LOG.debug("Converting record %d (type=%s, index=%d) to JSON...", records_extracted, record_type, record_index)
+                json_start = time.perf_counter()
                 record_converted = convert_decimals(record)
                 # Convert record to JSON string for jsonb storage
                 record_json = json.dumps(record_converted, ensure_ascii=False)
+                json_time += time.perf_counter() - json_start
                 # Calculate payload size (JSON string length in bytes)
                 payload_size = len(record_json.encode('utf-8'))
                 LOG.debug("Record %d converted: payload_size=%d bytes", records_extracted, payload_size)
@@ -389,6 +410,7 @@ def ingest_file_python(
                 
                 # Write row: source_name, file_name, file_size, record_type, record_index, payload, payload_size
                 # The CSV writer will properly escape quotes and special characters
+                csv_start = time.perf_counter()
                 batch_writer.writerow([
                     source_name,
                     file_name,
@@ -398,6 +420,7 @@ def ingest_file_python(
                     record_json,
                     str(payload_size),  # Payload size in bytes (integer)
                 ])
+                csv_time += time.perf_counter() - csv_start
                 record_count += 1
                 
                 # Update progress bar less frequently (every 100 records) to reduce output
@@ -438,12 +461,22 @@ def ingest_file_python(
                 LOG.debug("Writing any remaining records in buffer")
                 write_batch_to_db(batch_buffer)
             
+            total_elapsed = time.perf_counter() - overall_start
             LOG.info(
                 "Successfully ingested %s: %d records (source: %s)",
                 file_name,
                 record_count,
                 source_name,
             )
+            if total_elapsed > 0:
+                LOG.info(
+                    "Timing summary: total=%.2fs, extract=%.2fs (%.1f%%), json=%.2fs (%.1f%%), csv=%.2fs (%.1f%%), copy=%.2fs (%.1f%%)",
+                    total_elapsed,
+                    extract_time, 100.0 * extract_time / total_elapsed,
+                    json_time, 100.0 * json_time / total_elapsed,
+                    csv_time, 100.0 * csv_time / total_elapsed,
+                    copy_time, 100.0 * copy_time / total_elapsed,
+                )
             return 0
             
         except Exception as exc:  # noqa: BLE001

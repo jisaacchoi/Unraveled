@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """
-Refresh schema groups and optionally generate schema JSON files.
+Refresh schema groups and generate schema JSON files.
 
 This command:
 1. Reads files from input_directory (files with _ingested_analyzed_ prefix)
 2. Refreshes the schema_groups table from mrf_analysis data, grouping files by schema signature
 3. Moves files from input_directory to output_directory
-4. Organizes files into subfolders (group_<hash>, where hash is derived from schema_sig) within output_directory by schema group
-5. Optionally generates schema JSON files for each group using mrf_analysis table
+4. Moves files into output_directory without group hash prefixing
+5. Generates schema JSON files for each file using mrf_analysis table (<file>_schema.json)
 
 File Flow:
     input_directory/
         _ingested_analyzed_file1.json.gz
         _ingested_analyzed_file2.json.gz
-    ↓ (moved and organized)
+    ↓ (moved and renamed)
     output_directory/
-        group_1/
-            _ingested_analyzed_file1.json.gz
-        group_2/
-            _ingested_analyzed_file2.json.gz
+        _ingested_analyzed_file1.json.gz
+        _ingested_analyzed_file2.json.gz
 
 Usage:
     python commands/04_group_split_schemas.py --config config.yaml
@@ -36,10 +34,37 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.shared.config import configure_logging, get_log_file_path, load_config
 from src.shared.database import build_connection_string
 from src.generate_schemas.schema_orchestrator import run_full_pipeline
-from src.generate_schemas.schema_inference import generate_schema_for_group
-from pyspark.sql import SparkSession
+from src.generate_schemas.schema_groups_db import get_all_file_names_from_schema_groups
+from src.generate_schemas.schema_inference import generate_schema_for_file
 
 LOG = logging.getLogger("commands.gen_schemas")
+
+
+def _build_empty_marker_name(filename: str) -> str:
+    """
+    Build an empty marker filename for a file in the output directory.
+    Strips processing prefixes before adding _empty_.
+    """
+    from src.shared.file_prefix import PREFIX_ANALYZED, PREFIX_INGESTED
+
+    name = filename
+    combined_prefix = PREFIX_INGESTED + PREFIX_ANALYZED[1:]  # _ingested_analyzed_
+    if name.startswith(combined_prefix):
+        name = name[len(combined_prefix):]
+    elif name.startswith(PREFIX_INGESTED):
+        name = name[len(PREFIX_INGESTED):]
+    elif name.startswith(PREFIX_ANALYZED):
+        name = name[len(PREFIX_ANALYZED):]
+
+    if name.startswith("_empty_"):
+        return name
+    return f"_empty_{name}"
+
+
+def _is_empty_marker(filename: str) -> bool:
+    if filename.startswith("_empty_"):
+        return True
+    return False
 
 
 def main() -> int:
@@ -88,11 +113,10 @@ def main() -> int:
     input_directory_cfg = pipeline_config.get("input_directory") or shape_grouping_cfg.get("input_directory")
     output_directory_cfg = pipeline_config.get("output_directory") or shape_grouping_cfg.get("output_directory")
     refresh_schema_groups = shape_grouping_cfg.get("refresh_schema_groups", False)
+    overwrite_existing_schemas = shape_grouping_cfg.get("overwrite_existing_schemas", True)
     
-    # Schema generation configuration
-    schema_cfg = shape_grouping_cfg.get("create_schema", {})
-    enable_schema = schema_cfg.get("enabled", False)
-    schema_filename = schema_cfg.get("name", "schema.json")
+    end_delete_after_gen_schemas = shape_grouping_cfg.get("end_delete_after_gen_schemas", False)
+    # Schema filename is now based on file name (<file>_schema.json)
     
     if not input_directory_cfg:
         LOG.error("No input_directory in config.pipeline or config.pipeline.shape_grouping")
@@ -116,13 +140,15 @@ def main() -> int:
     LOG.info("Using config from %s", args.config)
     LOG.info("Batch size: %d, Fetch batch size: %d", batch_size, fetch_batch_size)
     LOG.info("Refresh schema groups: %s", refresh_schema_groups)
+    LOG.info("End delete after gen_schemas: %s", end_delete_after_gen_schemas)
+    LOG.info("Overwrite existing schemas: %s", overwrite_existing_schemas)
     LOG.info("=== Directory Configuration ===")
     LOG.info("Input directory (source): %s", input_directory)
     LOG.info("  - Files will be read from this directory")
     LOG.info("  - Only files with _ingested_analyzed_ prefix will be processed")
     LOG.info("Output directory (destination): %s", output_directory)
     LOG.info("  - Files will be moved from input directory to this directory")
-    LOG.info("  - Files will be organized into subfolders (group_<hash> based on schema_sig) by schema group")
+    LOG.info("  - Files are moved to output directory without group hash prefixes")
     
     try:
         # Run group pipeline (detect is disabled, only group is enabled)
@@ -131,12 +157,13 @@ def main() -> int:
         # 1. Read files from input_directory (files with _ingested_analyzed_ prefix)
         # 2. Refresh schema_groups table from mrf_analysis data
         # 3. Move files from input_directory to output_directory root
-        # 4. Organize files into subfolders (group_<hash> based on schema_sig) within output_directory by schema group
+        # 4. Rename files with group_<hash>__ prefix (hash based on schema_sig) within output_directory
+        # 5. Generate schema JSON files for each file
         LOG.info("=== Starting Schema Grouping Pipeline ===")
         LOG.info("Step 1: Reading files from input directory: %s", input_directory)
         LOG.info("Step 2: Refreshing schema_groups table from mrf_analysis data")
         LOG.info("Step 3: Moving files to output directory: %s", output_directory)
-        LOG.info("Step 4: Organizing files into schema group subfolders (group_<hash> based on schema_sig)")
+        LOG.info("Step 4: Moving files without schema group hash prefixing")
         
         result = run_full_pipeline(
             connection_string=connection_string,
@@ -149,7 +176,7 @@ def main() -> int:
             refresh_schema_groups=refresh_schema_groups,
             download_path=None,
             analyzed_directory=None,
-            files_output_directory=output_directory,  # Destination: files moved here and organized into subfolders
+            files_output_directory=output_directory,  # Destination: files moved here and prefixed with group_<hash>__
             enable_detect=False,  # Always disabled for this command
             enable_group=True,   # Always enabled for this command
         )
@@ -160,52 +187,64 @@ def main() -> int:
             LOG.error("Schema group refresh completed with errors")
             return result
         
-        # Step 2: Generate schema JSON files (if enabled)
-        if enable_schema:
-            LOG.info("=== Generating schema JSON files from mrf_analysis ===")
-            
-            if not output_directory.exists():
-                LOG.warning("Output directory does not exist, skipping schema generation: %s", output_directory)
-            else:
-                # Create Spark session for schema inference
-                try:
-                    spark = SparkSession.builder.appName("SchemaGeneration").getOrCreate()
-                    LOG.info("Spark session created for schema generation")
-                    
-                    # Process each group subfolder
-                    group_dirs = [d for d in output_directory.iterdir() if d.is_dir() and d.name.startswith("group_")]
-                    LOG.info("Found %d group subfolder(s) to process for schema generation", len(group_dirs))
-                    
-                    schemas_created = 0
-                    schemas_skipped = 0
-                    for group_dir in sorted(group_dirs):
-                        try:
-                            # Check if schema file already exists for this group
-                            schema_path = group_dir / schema_filename
-                            if schema_path.exists():
-                                LOG.debug("Schema already exists for %s: %s (skipping)", group_dir.name, schema_path)
-                                schemas_skipped += 1
-                                continue
-                            
-                            # Only generate schema for new groups (folders without schema files)
-                            schema_path = generate_schema_for_group(
-                                spark=spark,
-                                group_dir=group_dir,
-                                schema_filename=schema_filename,
-                                connection_string=connection_string,
-                            )
-                            if schema_path:
-                                schemas_created += 1
-                                LOG.info("Generated schema for %s: %s", group_dir.name, schema_path)
-                        except Exception as exc:  # noqa: BLE001
-                            LOG.exception("Error generating schema for %s: %s", group_dir.name, exc)
+        # Step 2: Generate schema JSON files (always enabled)
+        LOG.info("=== Generating schema JSON files from mrf_analysis ===")
+        
+        if not output_directory.exists():
+            LOG.warning("Output directory does not exist, skipping schema generation: %s", output_directory)
+        else:
+            # Process each file (one schema per file)
+            try:
+                file_names = get_all_file_names_from_schema_groups(connection_string)
+                LOG.info("Found %d file(s) to process for schema generation", len(file_names))
+
+                schemas_created = 0
+                from src.generate_schemas.schema_inference import file_name_to_schema_filename
+                for file_name in file_names:
+                    try:
+                        schema_path = output_directory / file_name_to_schema_filename(file_name)
+                        if schema_path.exists() and not overwrite_existing_schemas:
+                            LOG.info("Schema already exists, skipping: %s", schema_path)
                             continue
-                    
-                    LOG.info("Schema generation complete: %d schema file(s) created, %d skipped (already exist)", 
-                            schemas_created, schemas_skipped)
-                except Exception as exc:  # noqa: BLE001
-                    LOG.exception("Error creating Spark session or generating schemas: %s", exc)
-                    LOG.warning("Schema generation failed, but continuing...")
+                        # Generate schema for each file
+                        schema_path = generate_schema_for_file(
+                            output_directory=output_directory,
+                            file_name=file_name,
+                            connection_string=connection_string,
+                        )
+                        if schema_path:
+                            schemas_created += 1
+                            LOG.info("Generated schema for file: %s", schema_path)
+
+                            if end_delete_after_gen_schemas:
+                                matches = [
+                                    p for p in output_directory.glob(f"*{file_name}")
+                                    if not _is_empty_marker(p.name)
+                                ]
+                                source_path = matches[0] if matches else None
+
+                                if source_path and source_path.exists():
+                                    if _is_empty_marker(source_path.name):
+                                        LOG.debug("File already empty marker, skipping: %s", source_path.name)
+                                        continue
+                                    marker_name = _build_empty_marker_name(source_path.name)
+                                    marker_path = source_path.with_name(marker_name)
+                                    try:
+                                        source_path.unlink()
+                                        marker_path.touch(exist_ok=True)
+                                        LOG.info("Emptied file and created marker: %s", marker_path.name)
+                                    except Exception as exc:  # noqa: BLE001
+                                        LOG.warning("Failed to create empty marker for %s: %s", source_path, exc)
+                                else:
+                                    LOG.warning("Could not locate file in output directory to empty: %s", file_name)
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.exception("Error generating schema for file: %s", exc)
+                        continue
+                
+                LOG.info("Schema generation complete: %d schema file(s) created", schemas_created)
+            except Exception as exc:  # noqa: BLE001
+                LOG.exception("Error generating schemas: %s", exc)
+                LOG.warning("Schema generation failed, but continuing...")
         
         return result
     

@@ -27,6 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser."""
     parser = argparse.ArgumentParser(description="Download payer MRF payloads")
     parser.add_argument("--config", default=Path("config.yaml"), type=Path, help="Config file path")
+    parser.add_argument("--file-pattern", type=str, help="Download only files matching this pattern (substring match in filename or URL)")
+    parser.add_argument("--file-url", type=str, help="Download only the file with this exact URL")
     return parser
 
 
@@ -76,6 +78,15 @@ def main() -> int:
         connection_string = None
     
     LOG.info("Starting download for config %s", args.config)
+    
+    # Get file filter options
+    file_pattern = getattr(args, 'file_pattern', None)
+    file_url = getattr(args, 'file_url', None)
+    
+    if file_pattern and file_url:
+        LOG.error("Cannot specify both --file-pattern and --file-url. Use only one.")
+        return 1
+    
     return run_download(
         payer=payer,
         output_root=output_root,
@@ -87,6 +98,8 @@ def main() -> int:
         max_file_size_gb=max_file_size_gb,
         max_total_size_gb=max_total_size_gb,
         connection_string=connection_string,
+        file_pattern=file_pattern,
+        file_url=file_url,
     )
 
 

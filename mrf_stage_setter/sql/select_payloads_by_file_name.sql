@@ -3,7 +3,7 @@
 -- Includes record_index to build correct paths (e.g., provider_references[0])
 -- Includes file_size from mrf_landing
 -- Only selects records that are not already analyzed in mrf_analysis table
--- Parameter: %s (file_name - must be provided via psycopg2 parameterized query)
+-- Parameter: file_name array (must be provided via psycopg2 parameterized query)
 SELECT DISTINCT ON (ml.file_name, ml.record_type)
     ml.file_name, 
     ml.source_name, 
@@ -12,7 +12,7 @@ SELECT DISTINCT ON (ml.file_name, ml.record_type)
     ml.record_index, 
     ml.payload
 FROM mrf_landing ml
-WHERE ml.file_name = %s
+WHERE ml.file_name = ANY(%s)
 AND NOT EXISTS (
     -- Check if this (file_name, record_type) combination already has analysis records
     -- Level 0 stores the record_type as the key (representing the top-level key)

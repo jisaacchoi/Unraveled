@@ -7,9 +7,9 @@ from typing import Optional
 
 from pyspark.sql import DataFrame, SparkSession, functions as F, types as T
 
-from src.convert.schema_utils import process_struct_level
+from src.schema_utils import process_struct_level
 
-LOG = logging.getLogger("src.convert.rates_processing")
+LOG = logging.getLogger("src.rates_processing")
 
 
 def process_in_network_rates(

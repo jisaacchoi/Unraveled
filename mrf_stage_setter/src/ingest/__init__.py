@@ -1,4 +1,5 @@
 """Ingest stage modules."""
-from src.ingest.mrf_ingester import ingest_file
+# mrf_ingester.py has been moved to _archive/
+# Use indexed_gzip_ingester_rare_keys for new ingestion workflows
 
-__all__ = ["ingest_file"]
+__all__ = []

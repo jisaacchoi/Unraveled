@@ -8,7 +8,6 @@ A complete pipeline for processing Machine Readable File (MRF) payer data. Downl
 
 - **Python 3.10+**
 - **PostgreSQL 13+** with `jsonb` support
-- **Java 8+** (required for PySpark features, optional for core pipeline)
 
 ### Installation
 
@@ -128,8 +127,8 @@ See `config.yaml` for all available options and their descriptions.
    ↓
 4. Generate Schemas
    ↓
-   Files organized into group_<hash>/ subfolders
-   Schema JSON files generated
+   Files moved to output directory (no group hash prefixes)
+   Schema JSON files generated as `<file>_schema.json`
    ↓
 5. Split
    ↓

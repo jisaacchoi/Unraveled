@@ -5,7 +5,7 @@ Migration: Copy files from output_directory to storage and EFS directories.
 This command copies all files and subfolders from pipeline.output_directory
 to pipeline.storage_directory and pipeline.EFS_directory, preserving the
 same file structure. These target directories are typically S3 buckets or
-other blob storage services and EFS mounts for PySpark processing.
+other blob storage services and EFS mounts for downstream processing.
 
 Usage:
     python commands/05_migration.py --config config.yaml

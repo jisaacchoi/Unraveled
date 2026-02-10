@@ -2,7 +2,7 @@
 import logging
 import re
 from pathlib import Path
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
 LOG = logging.getLogger("app.file_finder")
 
@@ -32,57 +32,43 @@ def find_source_file(input_directory: Path, source_file: str) -> Tuple[Path, Pat
     if not input_directory.exists():
         raise FileNotFoundError(f"Input directory does not exist: {input_directory}")
     
-    # Find all group subdirectories
+    # Find all group subdirectories (optional)
     group_dirs = [d for d in input_directory.iterdir() if d.is_dir() and d.name.startswith("group_")]
+    if group_dirs:
+        LOG.info(f"Found {len(group_dirs)} group subdirectories")
+    else:
+        LOG.info("No group subdirectories found; searching input_directory directly")
     
-    if not group_dirs:
-        raise FileNotFoundError(f"No group subdirectories found in {input_directory}")
-    
-    LOG.info(f"Found {len(group_dirs)} group subdirectories")
-    
-    # Search for the file in each group directory
+    # Search for the file in each group directory or in input_directory directly
     found_file = None
     found_group = None
     
-    # Check if source_file has a _part#### suffix
-    # Pattern: filename_part####.json.gz
-    part_pattern = re.compile(r'^(.+?)_part\d{4}(\.json(?:\.gz)?)$')
-    match = part_pattern.match(source_file)
-    
-    if match:
-        # It's a split file - find all parts
-        base_name = match.group(1) + match.group(2)
-        LOG.info(f"Detected split file pattern. Base name: {base_name}")
-        
-        # Find all parts in the same group
-        for group_dir in sorted(group_dirs):
-            # Find all matching part files
-            part_files = sorted(group_dir.glob(f"{base_name.replace('.json.gz', '')}_part*.json.gz"))
-            
-            if part_files:
-                found_file = part_files[0]  # Return first part as representative
-                found_group = group_dir
-                LOG.info(f"Found split file in {group_dir.name}: {len(part_files)} parts")
-                for part_file in part_files:
-                    LOG.info(f"  - {part_file.name}")
-                break
-    else:
-        # Regular file - search for exact match
-        for group_dir in sorted(group_dirs):
-            file_path = group_dir / source_file
-            if file_path.exists():
-                found_file = file_path
-                found_group = group_dir
-                LOG.info(f"Found file in {group_dir.name}: {file_path.name}")
-                break
+    # Substring match: select all files whose name contains source_file
+    candidate_files = []
+    for group_dir in sorted(group_dirs):
+        candidate_files.extend([p for p in group_dir.glob("*.json.gz") if source_file in p.name])
+    if not candidate_files:
+        candidate_files = [p for p in input_directory.glob("*.json.gz") if source_file in p.name]
+
+    if candidate_files:
+        candidate_files = sorted(candidate_files)
+        found_file = candidate_files[0]
+        found_group = found_file.parent
+        LOG.info(f"Found {len(candidate_files)} matching file(s); using {found_file.name} for schema lookup")
     
     if not found_file or not found_group:
         raise FileNotFoundError(
-            f"Source file not found: {source_file} in any group subdirectory of {input_directory}"
+            f"Source file not found: {source_file} in {input_directory}"
         )
     
-    # Find schema.json in the same group directory
-    schema_path = found_group / "schema.json"
+    # Find schema file in the same directory as the file.
+    # Convention: {group_prefix}__schema.json where group_prefix is before "__" in source_file.
+    if "__" not in found_file.name:
+        raise FileNotFoundError(
+            f"Matched file does not include '__' group prefix: {found_file.name}"
+        )
+    group_prefix = found_file.name.split("__", 1)[0]
+    schema_path = found_group / f"{group_prefix}__schema.json"
     if not schema_path.exists():
         raise FileNotFoundError(
             f"Schema file not found: {schema_path}. Required for processing."
@@ -95,28 +81,84 @@ def find_source_file(input_directory: Path, source_file: str) -> Tuple[Path, Pat
 
 def find_all_file_parts(input_directory: Path, source_file: str) -> List[Path]:
     """
-    Find all parts of a split file.
+    Find all files that match a substring of source_file.
     
     Args:
         input_directory: Base directory containing group subdirectories
-        source_file: Name of the source file (may have _part#### suffix)
+        source_file: Substring to match against file names
         
     Returns:
-        List of paths to all file parts, sorted by part number
+        List of paths to all matching files, sorted by name
     """
-    # Find the group directory and base name
-    file_path, _ = find_source_file(input_directory, source_file)
-    group_dir = file_path.parent
+    # Use the same matching logic as find_source_file
+    group_dirs = [d for d in input_directory.iterdir() if d.is_dir() and d.name.startswith("group_")]
+    candidate_files = []
+    for group_dir in sorted(group_dirs):
+        candidate_files.extend([p for p in group_dir.glob("*.json.gz") if source_file in p.name])
+    if not candidate_files:
+        candidate_files = [p for p in input_directory.glob("*.json.gz") if source_file in p.name]
     
-    # Extract base name (remove _part#### if present)
-    part_pattern = re.compile(r'^(.+?)_part\d{4}(\.json(?:\.gz)?)$')
-    match = part_pattern.match(source_file)
-    
-    if match:
-        base_name = match.group(1) + match.group(2)
-        # Find all parts
-        part_files = sorted(group_dir.glob(f"{base_name.replace('.json.gz', '')}_part*.json.gz"))
-        return part_files
-    else:
-        # Not a split file, return single file
-        return [file_path]
+    return sorted(candidate_files)
+
+
+def collect_structure_directories_for_files(
+    structure_roots: Iterable[Path],
+    file_names: Iterable[str],
+) -> List[Path]:
+    """
+    Find directories that contain structure files matching given file names.
+
+    Args:
+        structure_roots: Iterable of root directories to scan
+        file_names: Iterable of file names to match exactly
+
+    Returns:
+        List of directories that contain matching structure files
+    """
+    names = {n for n in file_names if n}
+    if not names:
+        return []
+    dirs: List[Path] = []
+    for root in structure_roots:
+        if not root or not root.exists() or not root.is_dir():
+            continue
+        for name in names:
+            for match in root.rglob(name):
+                if match.is_file():
+                    dirs.append(match.parent)
+    return sorted(set(dirs))
+
+
+def find_source_file_in_paths(search_paths: Iterable[Path], source_file: str) -> Tuple[Path, Path]:
+    """
+    Find source file in multiple search paths (and their group subdirectories).
+    """
+    for base in search_paths:
+        if not base or not base.exists():
+            continue
+        try:
+            return find_source_file(base, source_file)
+        except FileNotFoundError:
+            continue
+    raise FileNotFoundError(f"Source file not found: {source_file} in any search path")
+
+
+def find_all_file_parts_in_paths(search_paths: Iterable[Path], source_file: str) -> List[Path]:
+    """
+    Find all file parts across multiple search paths.
+    """
+    all_parts: List[Path] = []
+    for base in search_paths:
+        if not base or not base.exists():
+            continue
+        all_parts.extend(find_all_file_parts(base, source_file))
+    return sorted(set(all_parts))
+
+
+def find_group_dirs_with_files(search_paths: Iterable[Path], source_file: str) -> List[Path]:
+    """
+    Find group directories that contain matching source files.
+    """
+    files = find_all_file_parts_in_paths(search_paths, source_file)
+    group_dirs = sorted({p.parent for p in files})
+    return group_dirs

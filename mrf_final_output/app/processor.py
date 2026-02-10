@@ -36,6 +36,8 @@ def process_single_file(
     skip_url_download: bool = False,
     is_serverless: bool = True,
     enable_url_expansion: bool = True,
+    output_format: str = "parquet",
+    append_output: bool = False,
 ) -> Dict:
     """
     Process a single JSON.gz file (or split files) to Parquet format.
@@ -198,6 +200,16 @@ def process_single_file(
     
     # Simplify column names
     rates_with_providers = simplify_column_names(rates_with_providers)
+
+    # If NPI is an array (after simplification), explode to one NPI per row
+    try:
+        npi_fields = [f for f in rates_with_providers.schema.fields if "npi" in f.name.lower()]
+        for field in npi_fields:
+            if isinstance(field.dataType, T.ArrayType):
+                LOG.info(f"Exploding NPI array column '{field.name}' to one NPI per row...")
+                rates_with_providers = rates_with_providers.withColumn(field.name, F.explode_outer(F.col(field.name)))
+    except Exception as e:
+        LOG.warning(f"Could not inspect/explode NPI column(s): {e}")
     
     # Prepare filters
     provider_npi_set = None
@@ -210,8 +222,11 @@ def process_single_file(
         # Convert billing code filter to list format for filter_rates_dataframe
         # filter_rates_dataframe expects filters as list of (column_name, filter_value) tuples
         # where filter_value can be a list for ranges
-        filters = [("billing_code", billing_code_filter)]
-        LOG.info(f"Using billing code filter: {len(billing_code_filter)} codes/ranges")
+        filters = [
+            ("billing_code", billing_code_filter),
+            ("billing_code_type", "CPT"),
+        ]
+        LOG.info(f"Using CPT billing code filter: {len(billing_code_filter)} codes/ranges")
     
     # Apply filters
     if provider_npi_set or filters:
@@ -240,7 +255,10 @@ def process_single_file(
         LOG.info(f"Cached {cache_count:,} rows")
     
     # Use rates_with_providers as fact table (no dimension normalization)
-    fact_df = rates_with_providers
+    # Cast all columns to string to avoid dtype issues and keep filtering consistent
+    fact_df = rates_with_providers.select(
+        [F.col(c).cast("string").alias(c) for c in rates_with_providers.columns]
+    )
     
     # Unpersist if cached
     if not is_serverless:
@@ -251,11 +269,18 @@ def process_single_file(
     fact_output_dir = output_dir / "fact"
     fact_output_dir.mkdir(parents=True, exist_ok=True)
     
-    LOG.info("Writing fact table...")
-    fact_df.write.mode("overwrite").option("compression", "zstd").parquet(str(fact_output_dir))
-    
-    # Count files written
-    files_written += len(list(fact_output_dir.glob("*.parquet")))
+    if output_format.lower() == "pandas_csv":
+        LOG.info("Writing fact table via pandas to CSV%s...", " (append)" if append_output else " (single file)")
+        pandas_df = fact_df.toPandas()
+        csv_path = fact_output_dir / "fact.csv"
+        write_header = not csv_path.exists() or not append_output
+        pandas_df.to_csv(csv_path, index=False, mode="a" if append_output else "w", header=write_header)
+        files_written = 1
+    else:
+        LOG.info("Writing fact table as Parquet%s...", " (append)" if append_output else "")
+        write_mode = "append" if append_output else "overwrite"
+        fact_df.write.mode(write_mode).option("compression", "zstd").parquet(str(fact_output_dir))
+        files_written += len(list(fact_output_dir.glob("*.parquet")))
     
     # Get row count (approximate or actual)
     try:

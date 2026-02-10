@@ -45,6 +45,37 @@ def load_sql_file(filename: str) -> str:
         return fh.read().strip()
 
 
+def build_empty_marker_path(source_path: Path) -> Path:
+    """
+    Build the empty marker filename for a processed file.
+
+    Uses the analyzed-prefix convention and inserts "empty_" after the analyzed prefix.
+    Example:
+      _ingested_foo.json.gz -> _ingested_analyzed_empty_foo.json.gz
+    """
+    from src.shared.file_prefix import add_prefix, PREFIX_ANALYZED, PREFIX_INGESTED
+
+    analyzed_path = add_prefix(source_path, PREFIX_ANALYZED)
+    filename = analyzed_path.name
+
+    combined_prefix = PREFIX_INGESTED + PREFIX_ANALYZED[1:]  # _ingested_analyzed_
+    if filename.startswith(combined_prefix):
+        remainder = filename[len(combined_prefix):]
+        marker_name = f"{combined_prefix}empty_{remainder}"
+    elif filename.startswith(PREFIX_ANALYZED):
+        remainder = filename[len(PREFIX_ANALYZED):]
+        marker_name = f"{PREFIX_ANALYZED}empty_{remainder}"
+    else:
+        marker_name = f"empty_{filename}"
+
+    return analyzed_path.with_name(marker_name)
+
+
+def _normalize_file_name(file_name: str) -> str:
+    """Normalize DB/file names to avoid .part suffix leaking into mrf_analysis."""
+    return file_name[:-5] if file_name.endswith(".part") else file_name
+
+
 def extract_top_level_key(level: int, path: str, key: str) -> str:
     """
     Extract the top-level key from a record.
@@ -344,10 +375,12 @@ def _analyze_files_from_directory(
     input_directory: Path,
     analyzed_directory: Optional[Path] = None,
     max_list_items: int = 10,
+    end_delete_after_analyze: bool = False,
 ) -> tuple[int, list[str]]:
     """
     Process files one at a time from input_directory for better performance on large tables.
     Moves each file to analyzed_directory immediately after successful analysis.
+    If end_delete_after_analyze is True, deletes the analyzed file and creates an empty marker file instead.
     
     Args:
         cursor: Database cursor
@@ -355,6 +388,7 @@ def _analyze_files_from_directory(
         fetch_batch_size: Batch size for fetching rows from database
         input_directory: Directory containing files to process
         analyzed_directory: Optional directory to move files to after analysis (if None, files are not moved)
+        end_delete_after_analyze: If True, delete analyzed files and create empty marker files
         
     Returns:
         Tuple of (number of analysis records inserted, list of processed file names)
@@ -396,15 +430,20 @@ def _analyze_files_from_directory(
         original_file_name = remove_prefix(json_file, PREFIX_INGESTED).name
         LOG.debug("Original filename (for DB query): %s", original_file_name)
         
-        # Execute query for this specific file using original filename
-        # Since file_name comes from filesystem (not user input), we can safely use string formatting
-        # But we still escape single quotes to be defensive
-        escaped_file_name = original_file_name.replace("'", "''")
-        formatted_query = query_sql.replace("%s", f"'{escaped_file_name}'")
-        cursor.execute(formatted_query)
+        # Execute query for this specific file using original filename and .part fallback
+        file_names = [original_file_name, f"{original_file_name}.part"]
+        cursor.execute(query_sql, (file_names,))
         
-        # Check if cursor has results
-        if cursor.description is None:
+        # Fetch the first batch to confirm there are rows
+        try:
+            rows = cursor.fetchmany(fetch_batch_size)
+        except psycopg2.ProgrammingError as e:
+            if "no results to fetch" in str(e).lower():
+                rows = []
+            else:
+                raise
+        
+        if not rows:
             LOG.info("No records found in mrf_landing for file: %s (original: %s, may already be analyzed), skipping", 
                     file_name_with_prefix, original_file_name)
             continue
@@ -415,19 +454,22 @@ def _analyze_files_from_directory(
         # Process rows for this file
         file_record_count = 0
         batch = []
+        pending_rows = rows
         
         while True:
-            try:
-                rows = cursor.fetchmany(fetch_batch_size)
-                if not rows:
-                    break
-            except psycopg2.ProgrammingError as e:
-                if "no results to fetch" in str(e).lower():
-                    break
-                raise
+            if not pending_rows:
+                try:
+                    pending_rows = cursor.fetchmany(fetch_batch_size)
+                    if not pending_rows:
+                        break
+                except psycopg2.ProgrammingError as e:
+                    if "no results to fetch" in str(e).lower():
+                        break
+                    raise
             
-            for row in rows:
+            for row in pending_rows:
                 fn, source_name, file_size, record_type, record_index, payload = row
+                fn_norm = _normalize_file_name(fn)
                 
                 LOG.debug("Analyzing structure for file: %s, record_type: %s, record_index: %d", 
                          fn, record_type, record_index)
@@ -484,7 +526,7 @@ def _analyze_files_from_directory(
                 top_level_path_group = top_level_path
                 
                 batch.append((
-                    fn,
+                    fn_norm,
                     source_name,
                     file_size,
                     0,  # Level 0
@@ -512,7 +554,7 @@ def _analyze_files_from_directory(
                 # Create new memoization cache for this file
                 memo = {}
                 for analysis_record in analyze_json_structure_enhanced(
-                    payload_dict, fn, source_name, file_size=file_size, level=1, path=initial_path,
+                    payload_dict, fn_norm, source_name, file_size=file_size, level=1, path=initial_path,
                     max_list_items=max_list_items,                     memo=memo
                 ):
                     # Path normalization is handled by SQL when creating schema_groups
@@ -549,6 +591,7 @@ def _analyze_files_from_directory(
                         total_records += len(batch)
                         LOG.debug("Inserted batch of %d analysis records (total: %d)", len(batch), total_records)
                         batch = []
+            pending_rows = []
         
         # Insert remaining records for this file
         if batch:
@@ -567,18 +610,25 @@ def _analyze_files_from_directory(
             LOG.info("Completed analysis for %s (original: %s): %d analysis records inserted", 
                     file_name_with_prefix, original_file_name, file_record_count)
             
-            # Rename file with _analyzed_ prefix after successful analysis
+            # Rename file with _analyzed_ prefix or delete and create an empty marker file
             source_path = input_directory / file_name_with_prefix
             if source_path.exists():
                 try:
-                    from src.shared.file_prefix import rename_with_prefix, PREFIX_ANALYZED
-                    LOG.info("Renaming analyzed file with _analyzed_ prefix: %s", source_path)
-                    new_path = rename_with_prefix(source_path, PREFIX_ANALYZED)
-                    LOG.info("✓ Successfully renamed analyzed file: %s -> %s", file_name_with_prefix, new_path.name)
+                    if end_delete_after_analyze:
+                        marker_path = build_empty_marker_path(source_path)
+                        LOG.info("Deleting analyzed file and creating empty marker: %s -> %s", source_path, marker_path)
+                        source_path.unlink()
+                        marker_path.touch(exist_ok=True)
+                        LOG.info("✓ Deleted analyzed file and created empty marker: %s -> %s", file_name_with_prefix, marker_path.name)
+                    else:
+                        from src.shared.file_prefix import rename_with_prefix, PREFIX_ANALYZED
+                        LOG.info("Renaming analyzed file with _analyzed_ prefix: %s", source_path)
+                        new_path = rename_with_prefix(source_path, PREFIX_ANALYZED)
+                        LOG.info("✓ Successfully renamed analyzed file: %s -> %s", file_name_with_prefix, new_path.name)
                 except Exception as rename_exc:  # noqa: BLE001
-                    LOG.error("✗ Failed to rename analyzed file %s with prefix (continuing): %s", 
+                    LOG.error("✗ Failed to finalize analyzed file %s (continuing): %s", 
                              file_name_with_prefix, rename_exc)
-                    LOG.exception("Full error details for rename failure:")
+                    LOG.exception("Full error details for finalization failure:")
             else:
                 LOG.warning("File %s not found in input directory (may have already been processed): %s", 
                            file_name_with_prefix, source_path)
@@ -591,7 +641,10 @@ def _analyze_files_from_directory(
         LOG.warning("No files were processed. All files may already be analyzed.")
     else:
         LOG.info("Total analysis records inserted: %d (from %d files)", total_records, files_processed)
-        LOG.info("Renamed %d file(s) with _analyzed_ prefix during processing", files_processed)
+        if end_delete_after_analyze:
+            LOG.info("Deleted %d file(s) and created empty markers during processing", files_processed)
+        else:
+            LOG.info("Renamed %d file(s) with _analyzed_ prefix during processing", files_processed)
     
     return total_records, processed_files
 
@@ -603,6 +656,7 @@ def analyze_mrf_landing_records(
     input_directory: Optional[Path] = None,
     analyzed_directory: Optional[Path] = None,
     max_list_items: int = 10,
+    end_delete_after_analyze: bool = False,
 ) -> tuple[int, list[str]]:
     """
     Analyze JSON structures from mrf_landing and insert into mrf_analysis table.
@@ -633,7 +687,13 @@ def analyze_mrf_landing_records(
         # If input_directory is provided, process files one at a time
         if input_directory and input_directory.exists() and input_directory.is_dir():
             total_records, processed_files = _analyze_files_from_directory(
-                cursor, batch_size, fetch_batch_size, input_directory, analyzed_directory, max_list_items
+                cursor,
+                batch_size,
+                fetch_batch_size,
+                input_directory,
+                analyzed_directory,
+                max_list_items,
+                end_delete_after_analyze,
             )
             return total_records, processed_files
         
@@ -684,8 +744,9 @@ def analyze_mrf_landing_records(
             for row in rows:
                 fn, source_name, file_size, record_type, record_index, payload = row
                 
-                processed_files_set.add(fn)  # Track this file
-                LOG.info("Analyzing structure for file: %s, record_type: %s, record_index: %d, file_size: %d bytes", fn, record_type, record_index, file_size or 0)
+                fn_norm = _normalize_file_name(fn)
+                processed_files_set.add(fn_norm)  # Track this file
+                LOG.info("Analyzing structure for file: %s, record_type: %s, record_index: %d, file_size: %d bytes", fn_norm, record_type, record_index, file_size or 0)
                 
                 # Parse payload JSON
                 if isinstance(payload, str):
@@ -754,7 +815,7 @@ def analyze_mrf_landing_records(
                 
                 # Record the top-level key at level 0
                 batch.append((
-                    fn,
+                    fn_norm,
                     source_name,
                     file_size,  # File size in bytes
                     0,  # Level 0 for top-level key
@@ -789,7 +850,7 @@ def analyze_mrf_landing_records(
                 # Create new memoization cache for this file
                 memo = {}
                 for analysis_record in analyze_json_structure_enhanced(
-                    payload_dict, fn, source_name, file_size=file_size, level=1, path=initial_path,
+                    payload_dict, fn_norm, source_name, file_size=file_size, level=1, path=initial_path,
                     max_list_items=max_list_items,                     memo=memo
                 ):
                     # Path normalization is handled by SQL when creating schema_groups
@@ -1241,6 +1302,7 @@ def run_shape_analysis(
     analyzed_directory: Optional[Path] = None,
     max_list_items: int = 10,
     max_url_downloads: Optional[int] = None,
+    end_delete_after_analyze: bool = False,
 ) -> tuple[int, int, list[str]]:
     """
     Run full shape analysis: analyze JSON structures and URLs.
@@ -1254,6 +1316,7 @@ def run_shape_analysis(
         analyzed_directory: Optional directory to move files to after analysis (files moved one at a time)
         max_list_items: Maximum number of items to sample from lists when analyzing structure (default: 10)
         max_url_downloads: Maximum number of successful URL downloads to process (None = no limit, recommended: 10 for testing)
+        end_delete_after_analyze: If True, delete analyzed files and create empty marker files
         
     Returns:
         Tuple of (total_records, url_records, processed_files) where:
@@ -1270,6 +1333,7 @@ def run_shape_analysis(
         input_directory=input_directory,
         analyzed_directory=analyzed_directory,
         max_list_items=max_list_items,
+        end_delete_after_analyze=end_delete_after_analyze,
     )
 
     LOG.info("Successfully analyzed structures: %d analysis records inserted from %d files", total_records, len(processed_files))
