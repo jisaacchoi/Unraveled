@@ -187,19 +187,19 @@ def _analyze_files_from_directory_comprehensive(
     batch_size: int,
     fetch_batch_size: int,
     input_directory: Path,
-    analyzed_directory: Optional[Path] = None,
     max_list_items: int = 10,
     end_delete_after_analyze: bool = False,
 ) -> tuple[int, list[str]]:
     """
     Process files one at a time, analyzing ALL items comprehensively.
     
+    Files are renamed in-place with _analyzed_ prefix after successful analysis.
+    
     Args:
         cursor: Database cursor
         batch_size: Batch size for inserts
         fetch_batch_size: Batch size for fetching rows from database
         input_directory: Directory containing files to process
-        analyzed_directory: Optional directory to move files to after analysis
         max_list_items: Maximum items to sample from nested lists
         end_delete_after_analyze: If True, delete analyzed files and create empty marker files
         
@@ -243,6 +243,22 @@ def _analyze_files_from_directory_comprehensive(
         
         # Execute query for this specific file
         file_names = [original_file_name, f"{original_file_name}.part"]
+        
+        # First, check if file exists in mrf_landing at all
+        check_landing_sql = "SELECT COUNT(*) FROM mrf_landing WHERE file_name = ANY(%s)"
+        cursor.execute(check_landing_sql, (file_names,))
+        landing_count = cursor.fetchone()[0]
+        
+        # Check if file is already analyzed
+        check_analyzed_sql = """
+            SELECT COUNT(DISTINCT key) 
+            FROM mrf_analysis 
+            WHERE file_name = ANY(%s) AND level = 0
+        """
+        cursor.execute(check_analyzed_sql, (file_names,))
+        analyzed_record_types = cursor.fetchone()[0]
+        
+        # Now execute the main query (excludes already analyzed)
         cursor.execute(query_sql, (file_names,))
         
         # Fetch all rows
@@ -255,8 +271,27 @@ def _analyze_files_from_directory_comprehensive(
                 raise
         
         if not rows:
-            LOG.info("No records found in mrf_landing for file: %s (original: %s, may already be analyzed), skipping",
-                    file_name_with_prefix, original_file_name)
+            if landing_count == 0:
+                LOG.warning("File not found in mrf_landing: %s (original: %s) - file may not have been ingested yet", 
+                        file_name_with_prefix, original_file_name)
+            elif analyzed_record_types > 0:
+                LOG.info("File already analyzed in mrf_analysis: %s (original: %s, %d record type(s) analyzed), skipping",
+                        file_name_with_prefix, original_file_name, analyzed_record_types)
+                # Rename file with _analyzed_ prefix if it doesn't already have it
+                from src.shared.file_prefix import add_prefix, PREFIX_ANALYZED, has_prefix
+                if not has_prefix(json_file, PREFIX_ANALYZED):
+                    try:
+                        analyzed_path = add_prefix(json_file, PREFIX_ANALYZED)
+                        if analyzed_path != json_file and not analyzed_path.exists():
+                            json_file.rename(analyzed_path)
+                            LOG.info("Renamed already-analyzed file: %s -> %s", json_file.name, analyzed_path.name)
+                        elif analyzed_path.exists():
+                            LOG.debug("File %s already has _analyzed_ prefix or target exists, skipping rename", json_file.name)
+                    except Exception as rename_exc:  # noqa: BLE001
+                        LOG.warning("Failed to rename already-analyzed file %s: %s", json_file.name, rename_exc)
+            else:
+                LOG.warning("File exists in mrf_landing (%d records) but no unanalyzed records found for: %s (original: %s)", 
+                        landing_count, file_name_with_prefix, original_file_name)
             continue
         
         LOG.info("Found %d record(s) in mrf_landing for file: %s (original: %s), starting comprehensive analysis...",
@@ -281,7 +316,9 @@ def _analyze_files_from_directory_comprehensive(
             
             # Get file metadata from first row
             fn, source_name, file_size, rt, rec_idx, payload, has_rare_keys = type_rows[0]
-            fn_norm = _normalize_file_name(fn)
+            # Normalize file name: remove .part suffix and ensure no prefixes
+            # Use original_file_name from outer scope to ensure consistency (database stores original names)
+            fn_norm = _normalize_file_name(original_file_name)
             
             # Record top-level structure (level 0)
             # Determine if this is an array based on number of rows
@@ -313,7 +350,38 @@ def _analyze_files_from_directory_comprehensive(
             if isinstance(rep_payload_dict, list) and len(rep_payload_dict) == 1:
                 rep_payload_dict = rep_payload_dict[0]
             
-            top_level_value_dtype = get_value_dtype(rep_payload_dict) if is_array else get_value_dtype(rep_payload_dict)
+            # Check mrf_landing to determine if this record_type is actually an array
+            # This is necessary because during ingestion, only specific items are extracted,
+            # so we might only have 1 row even though it's an array
+            is_array_from_landing = False
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM mrf_landing 
+                    WHERE file_name = %s 
+                      AND record_type = %s 
+                      AND array_start_offset IS NOT NULL
+                    LIMIT 1
+                """, (fn_norm, record_type))
+                has_array_offset = cursor.fetchone()[0] > 0
+                if has_array_offset:
+                    is_array_from_landing = True
+                    LOG.debug("Record_type '%s' is an array (array_start_offset found in mrf_landing)", record_type)
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("Error checking array_start_offset for %s/%s: %s (continuing)", fn_norm, record_type, exc)
+            
+            # Determine top-level value_dtype
+            # If mrf_landing says it's an array, treat it as array regardless of payload type
+            if is_array_from_landing:
+                top_level_value_dtype = "list"
+                LOG.debug("Record_type '%s' forced to 'list' based on array_start_offset in mrf_landing", record_type)
+            elif is_array:
+                # Multiple rows = array
+                top_level_value_dtype = "list"
+            else:
+                # Single row: determine from payload
+                top_level_value_dtype = get_value_dtype(rep_payload_dict)
+            
             top_level_url_in_value = has_url(rep_payload_dict)
             top_level_value_jsonb = json.dumps(rep_payload_dict) if rep_payload_dict is not None else None
             
@@ -387,18 +455,18 @@ def _analyze_files_from_directory_comprehensive(
         LOG.info("Completed comprehensive analysis for file %s: %d analysis records inserted",
                 file_name_with_prefix, file_record_count)
         
-        # Move file to analyzed directory if specified
-        if analyzed_directory:
-            from src.shared.file_prefix import add_prefix, PREFIX_ANALYZED
+        # Rename file in-place with _analyzed_ prefix
+        from src.shared.file_prefix import add_prefix, PREFIX_ANALYZED, has_prefix
+        if not has_prefix(json_file, PREFIX_ANALYZED):
             try:
-                analyzed_path = analyzed_directory / add_prefix(json_file, PREFIX_ANALYZED).name
-                if not analyzed_path.exists():
+                analyzed_path = add_prefix(json_file, PREFIX_ANALYZED)
+                if analyzed_path != json_file and not analyzed_path.exists():
                     json_file.rename(analyzed_path)
-                    LOG.info("Moved file to analyzed directory: %s -> %s", json_file.name, analyzed_path.name)
-                else:
-                    LOG.warning("Analyzed file already exists, skipping move: %s", analyzed_path)
+                    LOG.info("Renamed analyzed file: %s -> %s", json_file.name, analyzed_path.name)
+                elif analyzed_path.exists():
+                    LOG.debug("File %s already has _analyzed_ prefix or target exists, skipping rename", json_file.name)
             except Exception as exc:  # noqa: BLE001
-                LOG.warning("Failed to move file to analyzed directory: %s", exc)
+                LOG.warning("Failed to rename analyzed file %s: %s", json_file.name, exc)
     
     if files_processed == 0:
         LOG.warning("No files were processed. All files may already be analyzed.")
@@ -414,7 +482,6 @@ def run_comprehensive_shape_analysis(
     fetch_batch_size: int = 10000,
     download_path: Optional[Path] = None,
     input_directory: Optional[Path] = None,
-    analyzed_directory: Optional[Path] = None,
     max_list_items: int = 10,
     max_url_downloads: Optional[int] = None,
 ) -> tuple[int, int, list[str]]:
@@ -424,13 +491,14 @@ def run_comprehensive_shape_analysis(
     Analyzes ALL items for each record_type to build comprehensive structure,
     prioritizing items with rare keys but including common items for completeness.
     
+    Files are renamed in-place with _analyzed_ prefix after successful analysis.
+    
     Args:
         connection_string: PostgreSQL connection string
         batch_size: Batch size for inserts
         fetch_batch_size: Batch size for fetching rows
         download_path: Optional directory for URL downloads (deprecated)
         input_directory: Optional directory to get file list from
-        analyzed_directory: Optional directory to move files to after analysis
         max_list_items: Maximum items to sample from nested lists
         max_url_downloads: Maximum URL downloads (deprecated)
         
@@ -450,7 +518,6 @@ def run_comprehensive_shape_analysis(
                 batch_size,
                 fetch_batch_size,
                 input_directory,
-                analyzed_directory,
                 max_list_items,
                 end_delete_after_analyze=False,
             )

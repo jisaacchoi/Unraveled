@@ -15,7 +15,9 @@ import argparse
 import logging
 import multiprocessing
 import os
+import psycopg2
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional, Tuple
@@ -31,14 +33,41 @@ from src.shared.file_prefix import PREFIX_INGESTED
 LOG = logging.getLogger("commands.ingest_rare_keys")
 
 
+def create_mrf_landing_indexes(connection_string: str) -> None:
+    """Create mrf_landing secondary indexes after ingest completes."""
+    conn = None
+    cursor = None
+    ddl_path = Path(__file__).parent.parent / "sql" / "create_mrf_landing_indexes_rare_keys.sql"
+
+    if not ddl_path.exists():
+        raise FileNotFoundError(f"Index DDL file not found: {ddl_path}")
+
+    try:
+        conn = psycopg2.connect(connection_string)
+        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = conn.cursor()
+        with open(ddl_path, "r", encoding="utf-8") as fh:
+            ddl_sql = fh.read()
+        LOG.info("Creating mrf_landing indexes from %s", ddl_path)
+        cursor.execute(ddl_sql)
+        LOG.info("mrf_landing indexes are ready")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 def _ingest_single_file_worker(
-    file_info: Tuple[str, str, str, int, int, int, Optional[str], str, Optional[str], int, int, int, int, float, float, Optional[int], float]
+    file_info: Tuple[str, str, str, int, int, int, Optional[str], str, Optional[str], int, int, int, int, float, float, Optional[int], float, int]
 ) -> int:
     """
     Worker function for multiprocessing - repeatedly scans and ingests files.
+    Uses dynamic assignment: each scan, workers claim files based on their worker_id position.
+    Worker with highest worker_id gets first file, second highest gets second, etc.
     
     Args:
-        file_info: Tuple of configuration parameters
+        file_info: Tuple of configuration parameters (including num_workers at the end)
         
     Returns:
         Exit code: 0 on clean completion, 1 on error
@@ -46,7 +75,7 @@ def _ingest_single_file_worker(
     (input_dir_str, source_name, connection_string, batch_size, max_array_items, worker_id,
      log_file_path, index_path_base_str, log_format, log_datefmt, scan_chunk_read_bytes,
      max_span_size, num_key_threads, progress_every_chunks, poll_interval_seconds,
-     min_file_size_mb_for_indexed_gzip, max_idle_polls, num_rare_keys) = file_info
+     min_file_size_mb_for_indexed_gzip, max_idle_polls, num_rare_keys, num_workers) = file_info
     
     process_id = os.getpid()
     
@@ -81,7 +110,7 @@ def _ingest_single_file_worker(
     
     input_dir = Path(input_dir_str)
     index_path_base = Path(index_path_base_str) if index_path_base_str else None
-    worker_log.info(f"[PID:{process_id}] [worker:{worker_id}] Starting worker loop in {input_dir}")
+    worker_log.info(f"[PID:{process_id}] [worker:{worker_id}] Starting worker loop in {input_dir} (total workers: {num_workers})")
     
     def _scan_candidates() -> list[Path]:
         candidates = [
@@ -96,13 +125,23 @@ def _ingest_single_file_worker(
         ]
         return sorted(candidates)
     
-    def _claim_file(file_path: Path) -> Optional[Tuple[Path, str]]:
-        original_name = file_path.name
-        part_path = file_path.with_name(f"{file_path.name}.part")
+    def _claim_file_at_position(candidates: list[Path], position: int) -> Optional[Tuple[Path, str]]:
+        """
+        Try to claim a file at a specific position in the sorted candidate list.
+        Position is 0-indexed. Returns None if file doesn't exist or is already claimed.
+        """
+        if position >= len(candidates):
+            return None
+        
+        candidate = candidates[position]
+        original_name = candidate.name
+        part_path = candidate.with_name(f"{candidate.name}.part")
         try:
-            file_path.rename(part_path)
+            candidate.rename(part_path)
+            worker_log.info(f"[PID:{process_id}] [worker:{worker_id}] Claimed file at position {position}: {original_name} -> {part_path.name}")
             return part_path, original_name
         except (FileNotFoundError, PermissionError, OSError):
+            # File was already claimed by another worker
             return None
     
     def _finalize_ingested_file(part_path: Path, original_name: str) -> Optional[Path]:
@@ -128,11 +167,22 @@ def _ingest_single_file_worker(
     poll_interval_seconds = max(poll_interval_seconds, 0.5)
     
     while True:
+        # Scan directory and get sorted list of candidates (dynamic - queue changes each scan)
+        candidates = _scan_candidates()
         claimed = None
-        for candidate in _scan_candidates():
-            claimed = _claim_file(candidate)
-            if claimed:
-                break
+        
+        if candidates:
+            # Dynamic assignment on each scan: worker with highest worker_id gets first file (position 0),
+            # second highest gets second file (position 1), etc.
+            # worker_id ranges from 1 to num_workers, so highest = num_workers
+            # Position = num_workers - worker_id
+            # Example with 3 workers: worker 3 -> position 0, worker 2 -> position 1, worker 1 -> position 2
+            
+            assigned_position = num_workers - worker_id
+            
+            # Only try to claim file at our assigned position
+            # If it's taken or doesn't exist, wait for next scan (queue will have changed)
+            claimed = _claim_file_at_position(candidates, assigned_position)
         
         if not claimed:
             idle_polls += 1
@@ -149,20 +199,23 @@ def _ingest_single_file_worker(
         
         try:
             file_size_mb = part_path.stat().st_size / (1024 * 1024)
-            use_indexed_gzip = False
             file_index_path = None
+            temp_index_file = None
             
             if original_name.endswith(".gz"):
-                if file_size_mb >= min_file_size_mb_for_indexed_gzip:
-                    use_indexed_gzip = True
+                # Use persistent index for all .gz files (both large and small)
+                # Same logic for all files - build index file for better performance
                 if index_path_base:
                     file_index_path = index_path_base / f"{original_name}.gzi"
                 else:
                     file_index_path = part_path.with_name(f"{original_name}.gzi")
-            else:
-                file_index_path = None
-            
-            if use_indexed_gzip:
+                
+                if file_size_mb >= min_file_size_mb_for_indexed_gzip:
+                    worker_log.info(f"[PID:{process_id}] [worker:{worker_id}] Using indexed_gzip with persistent index: {original_name} ({file_size_mb:.1f} MB >= {min_file_size_mb_for_indexed_gzip} MB)")
+                else:
+                    worker_log.info(f"[PID:{process_id}] [worker:{worker_id}] Using indexed_gzip with persistent index: {original_name} ({file_size_mb:.1f} MB < {min_file_size_mb_for_indexed_gzip} MB, building index anyway)")
+                
+                # Use indexed_gzip for all .gz files
                 result = ingest_file_indexed_gzip_rare_keys(
                     connection_string=connection_string,
                     file_path=part_path,
@@ -178,9 +231,7 @@ def _ingest_single_file_worker(
                     num_rare_keys=num_rare_keys,
                 )
             else:
-                worker_log.warning(f"[PID:{process_id}] [worker:{worker_id}] Non-gzip file or too small for indexed_gzip: {original_name}")
-                # For non-gzip files, you might want to use regular ingester
-                # For now, skip
+                worker_log.warning(f"[PID:{process_id}] [worker:{worker_id}] Non-gzip file not supported: {original_name}")
                 result = 1
             
             if result == 0:
@@ -318,15 +369,24 @@ def main() -> int:
             use_indexed_gzip = False
             file_index_path = None
             
+            file_index_path = None
+            
             if original_name.endswith(".gz"):
-                if file_size_mb >= min_file_size_mb_for_indexed_gzip:
-                    use_indexed_gzip = True
+                # Use persistent index for all .gz files (both large and small)
+                # Same logic for all files - build index file for better performance
                 if index_path_base:
                     file_index_path = index_path_base / f"{original_name}.gzi"
                 else:
                     file_index_path = part_path.with_name(f"{original_name}.gzi")
             
-            if use_indexed_gzip:
+                if file_size_mb >= min_file_size_mb_for_indexed_gzip:
+                    LOG.info("Using indexed_gzip with persistent index: %s (%.1f MB >= %.1f MB)", 
+                            original_name, file_size_mb, min_file_size_mb_for_indexed_gzip)
+                else:
+                    LOG.info("Using indexed_gzip with persistent index: %s (%.1f MB < %.1f MB, building index anyway)", 
+                            original_name, file_size_mb, min_file_size_mb_for_indexed_gzip)
+                
+                # Use indexed_gzip for all .gz files
                 result = ingest_file_indexed_gzip_rare_keys(
                     connection_string=connection_string,
                     file_path=part_path,
@@ -342,7 +402,7 @@ def main() -> int:
                     num_rare_keys=num_rare_keys,
                 )
             else:
-                LOG.error("Non-gzip file or too small for indexed_gzip: %s", original_name)
+                LOG.error("Non-gzip file not supported: %s", original_name)
                 result = 1
             
             if result == 0:
@@ -350,6 +410,11 @@ def main() -> int:
                 final_path = part_path.with_name(final_name)
                 part_path.replace(final_path)
                 LOG.info("Successfully ingested and renamed: %s -> %s", part_path.name, final_path.name)
+                try:
+                    create_mrf_landing_indexes(connection_string)
+                except Exception as exc:  # noqa: BLE001
+                    LOG.error("Ingest succeeded but failed to create indexes: %s", exc)
+                    return 1
                 return 0
             LOG.error("Failed to ingest %s", original_name)
             part_path.replace(part_path.with_name(original_name))
@@ -384,6 +449,7 @@ def main() -> int:
         min_file_size_mb_for_indexed_gzip,
         max_idle_polls,
         num_rare_keys,
+        num_workers,  # Pass num_workers to each worker for dynamic file assignment
     )
     
     processes = []
@@ -400,6 +466,11 @@ def main() -> int:
     failed = [p for p in processes if p.exitcode not in (0, None)]
     if failed:
         LOG.error("One or more workers failed (%d/%d).", len(failed), len(processes))
+        return 1
+    try:
+        create_mrf_landing_indexes(connection_string)
+    except Exception as exc:  # noqa: BLE001
+        LOG.error("Ingest succeeded but failed to create indexes: %s", exc)
         return 1
     return 0
 

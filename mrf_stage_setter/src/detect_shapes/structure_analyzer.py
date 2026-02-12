@@ -504,18 +504,43 @@ def _analyze_files_from_directory(
                     # Payload is a list - this came from an array
                     top_level_value_dtype = "list"
                 else:
-                    # Check count of rows for this record_type
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM mrf_landing WHERE file_name = %s AND record_type = %s",
-                        (fn, record_type)
-                    )
-                    total_rows = cursor.fetchone()[0]
-                    if total_rows > 1:
-                        # Multiple rows = array (each array item becomes a separate row)
+                    # Check mrf_landing to determine if this record_type is actually an array
+                    # This is necessary because during ingestion, only specific items are extracted,
+                    # so we might only have 1 row even though it's an array
+                    is_array_from_landing = False
+                    try:
+                        cursor.execute("""
+                            SELECT COUNT(*) 
+                            FROM mrf_landing 
+                            WHERE file_name = %s 
+                              AND record_type = %s 
+                              AND array_start_offset IS NOT NULL
+                            LIMIT 1
+                        """, (fn, record_type))
+                        has_array_offset = cursor.fetchone()[0] > 0
+                        if has_array_offset:
+                            is_array_from_landing = True
+                            LOG.debug("Record_type '%s' is an array (array_start_offset found in mrf_landing)", record_type)
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.warning("Error checking array_start_offset for %s/%s: %s (continuing)", fn, record_type, exc)
+                    
+                    if is_array_from_landing:
+                        # mrf_landing says it's an array, treat it as array
                         top_level_value_dtype = "list"
+                        LOG.debug("Record_type '%s' forced to 'list' based on array_start_offset in mrf_landing", record_type)
                     else:
-                        # Single row: could be array with 1 item, object, or scalar - determine from payload
-                        top_level_value_dtype = get_value_dtype(top_level_actual_value)
+                        # Check count of rows for this record_type
+                        cursor.execute(
+                            "SELECT COUNT(*) FROM mrf_landing WHERE file_name = %s AND record_type = %s",
+                            (fn, record_type)
+                        )
+                        total_rows = cursor.fetchone()[0]
+                        if total_rows > 1:
+                            # Multiple rows = array (each array item becomes a separate row)
+                            top_level_value_dtype = "list"
+                        else:
+                            # Single row: could be array with 1 item, object, or scalar - determine from payload
+                            top_level_value_dtype = get_value_dtype(top_level_actual_value)
                 
                 top_level_url_in_value = has_url(top_level_actual_value)
                 top_level_value_jsonb = json.dumps(top_level_actual_value) if top_level_actual_value is not None else None
@@ -792,18 +817,43 @@ def analyze_mrf_landing_records(
                     # Payload is a list - this came from an array
                     top_level_value_dtype = "list"
                 else:
-                    # Check count of rows for this record_type
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM mrf_landing WHERE file_name = %s AND record_type = %s",
-                        (fn, record_type)
-                    )
-                    total_rows = cursor.fetchone()[0]
-                    if total_rows > 1:
-                        # Multiple rows = array (each array item becomes a separate row)
+                    # Check mrf_landing to determine if this record_type is actually an array
+                    # This is necessary because during ingestion, only specific items are extracted,
+                    # so we might only have 1 row even though it's an array
+                    is_array_from_landing = False
+                    try:
+                        cursor.execute("""
+                            SELECT COUNT(*) 
+                            FROM mrf_landing 
+                            WHERE file_name = %s 
+                              AND record_type = %s 
+                              AND array_start_offset IS NOT NULL
+                            LIMIT 1
+                        """, (fn, record_type))
+                        has_array_offset = cursor.fetchone()[0] > 0
+                        if has_array_offset:
+                            is_array_from_landing = True
+                            LOG.debug("Record_type '%s' is an array (array_start_offset found in mrf_landing)", record_type)
+                    except Exception as exc:  # noqa: BLE001
+                        LOG.warning("Error checking array_start_offset for %s/%s: %s (continuing)", fn, record_type, exc)
+                    
+                    if is_array_from_landing:
+                        # mrf_landing says it's an array, treat it as array
                         top_level_value_dtype = "list"
+                        LOG.debug("Record_type '%s' forced to 'list' based on array_start_offset in mrf_landing", record_type)
                     else:
-                        # Single row: could be array with 1 item, object, or scalar - determine from payload
-                        top_level_value_dtype = get_value_dtype(top_level_actual_value)
+                        # Check count of rows for this record_type
+                        cursor.execute(
+                            "SELECT COUNT(*) FROM mrf_landing WHERE file_name = %s AND record_type = %s",
+                            (fn, record_type)
+                        )
+                        total_rows = cursor.fetchone()[0]
+                        if total_rows > 1:
+                            # Multiple rows = array (each array item becomes a separate row)
+                            top_level_value_dtype = "list"
+                        else:
+                            # Single row: could be array with 1 item, object, or scalar - determine from payload
+                            top_level_value_dtype = get_value_dtype(top_level_actual_value)
                 
                 top_level_url_in_value = has_url(top_level_actual_value)
                 top_level_value_jsonb = json.dumps(top_level_actual_value) if top_level_actual_value is not None else None

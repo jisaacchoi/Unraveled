@@ -38,6 +38,7 @@ def process_single_file(
     enable_url_expansion: bool = True,
     output_format: str = "parquet",
     append_output: bool = False,
+    enable_parquet_conversion: bool = True,  # If False, skip parquet writing
 ) -> Dict:
     """
     Process a single JSON.gz file (or split files) to Parquet format.
@@ -269,7 +270,10 @@ def process_single_file(
     fact_output_dir = output_dir / "fact"
     fact_output_dir.mkdir(parents=True, exist_ok=True)
     
-    if output_format.lower() == "pandas_csv":
+    if not enable_parquet_conversion:
+        LOG.info("Parquet conversion disabled - skipping file writing")
+        files_written = 0
+    elif output_format.lower() == "pandas_csv":
         LOG.info("Writing fact table via pandas to CSV%s...", " (append)" if append_output else " (single file)")
         pandas_df = fact_df.toPandas()
         csv_path = fact_output_dir / "fact.csv"

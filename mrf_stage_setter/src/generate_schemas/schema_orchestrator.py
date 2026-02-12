@@ -245,15 +245,27 @@ def run_full_pipeline(
                                 continue
                             
                             source_path = file_name_mapping[db_file_name]
-                            # Use the actual file name (with prefixes) for destination
-                            dest_path = files_output_directory / source_path.name
+                            # Strip prefixes from filename when moving to output directory
+                            # Database stores original file names without prefixes
+                            from src.shared.file_prefix import remove_prefix, PREFIX_INGESTED, PREFIX_ANALYZED
+                            dest_name = source_path.name
+                            # Strip all prefixes to get original filename
+                            dest_path_obj = source_path
+                            combined_prefix = PREFIX_INGESTED + PREFIX_ANALYZED[1:]  # _ingested_analyzed_
+                            if dest_name.startswith(combined_prefix):
+                                dest_path_obj = remove_prefix(remove_prefix(dest_path_obj, PREFIX_ANALYZED), PREFIX_INGESTED)
+                            elif dest_name.startswith(PREFIX_INGESTED):
+                                dest_path_obj = remove_prefix(dest_path_obj, PREFIX_INGESTED)
+                            elif dest_name.startswith(PREFIX_ANALYZED):
+                                dest_path_obj = remove_prefix(dest_path_obj, PREFIX_ANALYZED)
+                            dest_path = files_output_directory / dest_path_obj.name
                             
                             try:
                                 # Use shutil.move for better Windows compatibility
                                 shutil.move(str(source_path), str(dest_path))
                                 moved_count += 1
                                 successfully_moved_files.append(db_file_name)  # Track by DB name
-                                LOG.info("Moved file: %s -> %s", source_path.name, dest_path)
+                                LOG.info("Moved file (prefixes stripped): %s -> %s", source_path.name, dest_path.name)
                             except Exception as move_exc:  # noqa: BLE001
                                 LOG.warning("Failed to move file %s to output directory: %s", source_path.name, move_exc)
                                 failed_count += 1

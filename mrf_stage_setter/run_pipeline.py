@@ -14,6 +14,7 @@ import sys
 import logging
 import argparse
 import time
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set
@@ -32,16 +33,14 @@ CONFIG_PATH = Path("config.yaml")
 # Step definitions with descriptive names
 STEP1 = [sys.executable, "commands/01_download.py", "--config", "config.yaml"]  # Download MRF files from index URL
 STEP2 = [sys.executable, "commands/02_ingest.py", "--config", "config.yaml"]  # Ingest MRF JSON files into PostgreSQL (with rare key detection)
-STEP3 = [sys.executable, "commands/03_analyze.py", "--config", "config.yaml"]  # Analyze JSON structures from mrf_landing (comprehensive analysis)
-STEP4 = [sys.executable, "commands/04_gen_schemas.py", "--config", "config.yaml"]  # Group schemas (refresh schema_groups table)
-STEP5 = [sys.executable, "commands/05_split.py", "--config", "config.yaml"]  # Split large JSON.gz files into smaller parts
+STEP3 = [sys.executable, "commands/03_analyze_schema_gen.py", "--config", "config.yaml"]  # Analyze JSON structures and generate schemas
+STEP4 = [sys.executable, "commands/05_split.py", "--config", "config.yaml"]  # Split large JSON.gz files into smaller parts
 # Step descriptions
 STEP_DESCRIPTIONS = {
     1: "Download MRF files from index URL",
     2: "Ingest MRF JSON files into PostgreSQL",
-    3: "Analyze JSON structures from mrf_landing",
-    4: "Group schemas (refresh schema_groups table)",
-    5: "Split large JSON.gz files into smaller parts",
+    3: "Analyze JSON structures and generate schemas",
+    4: "Split large JSON.gz files into smaller parts",
 }
 
 # ----------------------------
@@ -103,9 +102,8 @@ def run_step(name: str, description: str, cmd: List[str]) -> None:
             log_file = get_log_file_path(config, {
                 1: "download",
                 2: "ingest", 
-                3: "analyze",
-                4: "gen_schemas",  # Match config.yaml log_files section
-                5: "split",  # Match config.yaml log_files section
+                3: "analyze",  # Combined analyze and schema gen
+                4: "split",
                 6: "migrate"
             }.get(int(name), "unknown"))
             if log_file and log_file.exists():
@@ -216,9 +214,8 @@ def parse_args():
 Examples:
   python run_pipeline.py --step 1     # Run step 1 only
   python run_pipeline.py --step 2     # Run step 2 only
-  python run_pipeline.py --step 3     # Run step 3 only
-  python run_pipeline.py --step 4     # Run step 4 only
-  python run_pipeline.py --step 5     # Run step 5 only (split files)
+  python run_pipeline.py --step 3     # Run step 3 only (analyze and generate schemas)
+  python run_pipeline.py --step 4     # Run step 4 only (split files)
   python run_pipeline.py --step 1 2   # Run steps 1 and 2 sequentially
   
 Note: Step 6 (JSON.gz to Parquet) is Databricks-only - run commands/05_jsongz_to_parquet_databricks.py directly in Databricks
@@ -228,9 +225,9 @@ Note: Step 6 (JSON.gz to Parquet) is Databricks-only - run commands/05_jsongz_to
         "--step",
         type=int,
         nargs="+",
-        choices=[1, 2, 3, 4, 5, 6],
+        choices=[1, 2, 3, 4, 6],
         required=True,
-        help="Step(s) to run (1-6). Example: --step 1 or --step 1 2 3"
+        help="Step(s) to run (1-4, 6). Example: --step 1 or --step 1 2 3"
     )
     return parser.parse_args()
 
@@ -272,7 +269,6 @@ def main():
         2: STEP2,
         3: STEP3,
         4: STEP4,
-        5: STEP5,
     }
     
     # Run selected steps sequentially
@@ -289,8 +285,8 @@ def main():
         description = STEP_DESCRIPTIONS.get(step_num, f"Step {step_num}")
         cmd = step_commands[step_num]
         
-        # Steps 1, 2, 3, 4, and 5 use polling (run, wait, run again)
-        if step_num in (1, 2, 3, 4, 5):
+        # Steps 1, 2, 3, and 4 use polling (run, wait, run again)
+        if step_num in (1, 2, 3, 4):
             if polling_num_additional_attempts == "inf":
                 LOG.info(
                     "Step %s: Using infinite polling mode (wait %d minutes between attempts, runs until interrupted)",

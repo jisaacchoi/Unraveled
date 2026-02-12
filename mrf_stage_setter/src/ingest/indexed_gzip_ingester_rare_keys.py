@@ -49,17 +49,33 @@ class KeyHit:
 class ScanResult:
     """Result of scanning for keys with occurrence tracking."""
     unique_hits: Dict[str, KeyHit]  # Top-level keys that appear once
-    key_occurrences: Dict[str, List[int]]  # All occurrences of each key: {key: [offset1, offset2, ...]}
+    key_occurrences: Dict[str, Tuple[int, int]]  # Count and first occurrence: {key: (count, first_offset)}
     array_starts: Dict[str, int]  # Array start offsets: {array_key: start_offset}
 
 
 def _decode_json_string_bytes(b: bytes) -> str:
-    """Decode JSON string bytes, handling escape sequences."""
-    s = b.decode("utf-8", errors="replace")
+    """
+    Decode JSON string bytes from regex capture group.
+    The regex already captured the key content, so we just need UTF-8 decode.
+    Most keys don't have escape sequences, so we optimize for the common case.
+    """
+    # Fast path: decode UTF-8 directly (works for 99%+ of keys)
     try:
-        return json.loads('"' + s.replace('"', '\\"') + '"')
+        decoded = b.decode("utf-8", errors="replace")
+        # If no backslash, no escaping needed - return immediately
+        if b'\\' not in b:
+            return decoded
     except Exception:
-        return s
+        # Fallback: if decode fails, return as-is (shouldn't happen)
+        return b.decode("utf-8", errors="replace")
+    
+    # Slow path: handle escape sequences (rare case)
+    # Use JSON parsing only when escapes are present
+    try:
+        return json.loads('"' + decoded.replace('"', '\\"') + '"')
+    except Exception:
+        # If JSON parsing fails, return decoded string (better than nothing)
+        return decoded
 
 
 def open_indexed_gzip(gz_path: str) -> indexed_gzip.IndexedGzipFile:
@@ -148,7 +164,7 @@ def scan_keys_with_occurrences(
     
     seen_once: Dict[str, int] = {}
     seen_multiple: set[str] = set()
-    key_occurrences: Dict[str, List[int]] = {}  # Track ALL occurrences
+    key_occurrences: Dict[str, Tuple[int, int]] = {}  # Track count and first occurrence: {key: (count, first_offset)}
     array_starts: Dict[str, int] = {}  # Track array start offsets
     
     tail = b""
@@ -167,6 +183,9 @@ def scan_keys_with_occurrences(
             combined = tail + chunk
             tail_len = len(tail)
             
+            # Track keys processed in this chunk for diagnostics
+            keys_in_chunk = 0
+            
             for m in KEY_PATTERN.finditer(combined):
                 if m.end() <= tail_len:
                     continue
@@ -176,22 +195,34 @@ def scan_keys_with_occurrences(
                 if abs_offset < 0:
                     abs_offset = m.start()
                 
-                # Track all occurrences
-                if key not in key_occurrences:
-                    key_occurrences[key] = []
-                key_occurrences[key].append(abs_offset)
+                keys_in_chunk += 1
+                
+                # Track count and first occurrence only (not all occurrences)
+                # Use dict.get() to avoid double lookup
+                existing = key_occurrences.get(key)
+                if existing is None:
+                    key_occurrences[key] = (1, abs_offset)  # (count, first_offset)
+                else:
+                    count, first_offset = existing
+                    key_occurrences[key] = (count + 1, first_offset)  # Increment count, keep first_offset
                 
                 # Track unique vs multiple (for top-level detection)
+                # Check seen_multiple first to short-circuit early (most keys will be here)
                 if key in seen_multiple:
+                    # Already know it's not unique, skip array detection
                     continue
                 
+                # Check if this is the second occurrence (move from seen_once to seen_multiple)
                 if key in seen_once:
                     del seen_once[key]
                     seen_multiple.add(key)
-                else:
-                    seen_once[key] = abs_offset
+                    # Skip array detection for non-unique keys
+                    continue
                 
-                # Detect if this key's value is an array
+                # First occurrence - add to seen_once
+                seen_once[key] = abs_offset
+                
+                # Detect if this key's value is an array (only for unique keys)
                 # Look ahead to see if value starts with '['
                 key_end = m.end()
                 value_start = key_end
@@ -209,6 +240,12 @@ def scan_keys_with_occurrences(
             if progress_every_chunks and (chunk_index % progress_every_chunks == 0):
                 elapsed = time.time() - start_time
                 msg = f"Scanned {chunk_index:,} chunks | "
+                
+                # Diagnostic info: dictionary sizes and keys per chunk
+                num_unique_keys = len(key_occurrences)
+                num_seen_once = len(seen_once)
+                num_seen_multiple = len(seen_multiple)
+                msg += f"Keys: {keys_in_chunk:,} in chunk | Unique: {num_unique_keys:,} | "
                 
                 # Calculate progress using uncompressed size from IndexedGzipFile
                 if uncompressed_size is not None and uncompressed_size > 0:
@@ -253,7 +290,8 @@ def scan_keys_with_occurrences(
         }
         
         LOG.info("Found %d unique (top-level) key(s)", len(unique_hits))
-        LOG.info("Tracked %d total key occurrences across all keys", sum(len(v) for v in key_occurrences.values()))
+        total_occurrences = sum(count for count, _ in key_occurrences.values())
+        LOG.info("Tracked %d total key occurrences across all keys", total_occurrences)
         LOG.info("Found %d array(s)", len(array_starts))
         
         return ScanResult(
@@ -352,7 +390,7 @@ def estimate_array_size(array_key: str, array_start_offset: int, f: indexed_gzip
 
 
 def identify_rare_keys_by_array(
-    key_occurrences: Dict[str, List[int]],
+    key_occurrences: Dict[str, Tuple[int, int]],
     array_starts: Dict[str, int],
     f: indexed_gzip.IndexedGzipFile,
     num_rare_keys: int = 10,
@@ -364,7 +402,7 @@ def identify_rare_keys_by_array(
     Only considers top-level arrays (arrays that are values of top-level keys).
     
     Args:
-        key_occurrences: All key occurrences: {key: [offset1, offset2, ...]}
+        key_occurrences: Count and first occurrence: {key: (count, first_offset)}
         array_starts: Array start offsets: {array_key: start_offset}
         f: IndexedGzipFile (not used, kept for compatibility)
         num_rare_keys: Number of least common keys to mark as rare per array (default: 10)
@@ -382,44 +420,37 @@ def identify_rare_keys_by_array(
             if top_level_key in array_starts:
                 top_level_array_names.add(top_level_key)
     
-    # Group occurrences by top-level array only
-    # For keys within nested arrays, assign them to the containing top-level array
-    occurrences_by_array: Dict[str, Dict[str, List[int]]] = {}
+    # Pre-sort top-level arrays by offset for efficient lookup
+    top_level_arrays_sorted = sorted(
+        [(name, array_starts[name]) for name in top_level_array_names],
+        key=lambda x: x[1],
+        reverse=True  # Descending order for efficient lookup
+    )
     
-    for key, offsets in key_occurrences.items():
-        for offset in offsets:
-            # Find the array that contains this offset
-            containing_array = find_array_for_key_offset(offset, array_starts)
-            
-            # Determine which top-level array this key belongs to
-            top_level_array = None
-            if containing_array:
-                # If the containing array is a top-level array, use it
-                if containing_array in top_level_array_names:
-                    top_level_array = containing_array
-                else:
-                    # It's a nested array - find the top-level array that contains it
-                    # Find the top-level array with start offset before this offset
-                    best_top_level = None
-                    best_offset = -1
-                    for tl_array in top_level_array_names:
-                        tl_start = array_starts[tl_array]
-                        if tl_start < offset and tl_start > best_offset:
-                            best_offset = tl_start
-                            best_top_level = tl_array
-                    top_level_array = best_top_level
-            
-            if top_level_array:
-                if top_level_array not in occurrences_by_array:
-                    occurrences_by_array[top_level_array] = {}
-                if key not in occurrences_by_array[top_level_array]:
-                    occurrences_by_array[top_level_array][key] = []
-                occurrences_by_array[top_level_array][key].append(offset)
+    # Group keys by top-level array using only first occurrence and count
+    # We don't need all offsets - just count and first occurrence location
+    occurrences_by_array: Dict[str, Dict[str, tuple[int, int]]] = {}  # {array: {key: (count, first_offset)}}
+    
+    for key, (count, first_offset) in key_occurrences.items():
+        # Use only the first occurrence to determine which array this key belongs to
+        
+        # Find the top-level array that contains this first occurrence
+        top_level_array = None
+        for tl_name, tl_start in top_level_arrays_sorted:
+            if tl_start < first_offset:
+                top_level_array = tl_name
+                break  # Found the best match (arrays are sorted descending)
+        
+        if top_level_array:
+            if top_level_array not in occurrences_by_array:
+                occurrences_by_array[top_level_array] = {}
+            # Store count and first offset (we don't need all offsets)
+            occurrences_by_array[top_level_array][key] = (count, first_offset)
     
     # Log grouping summary for debugging
     for array_key, keys_in_array in occurrences_by_array.items():
         total_keys = len(keys_in_array)
-        total_occurrences = sum(len(offsets) for offsets in keys_in_array.values())
+        total_occurrences = sum(count for count, _ in keys_in_array.values())
         LOG.debug("Array '%s': %d unique keys, %d total occurrences", array_key, total_keys, total_occurrences)
     
     # Identify rare keys in each array using comparative approach
@@ -428,15 +459,16 @@ def identify_rare_keys_by_array(
             continue
         
         # Sort keys by occurrence count (ascending - lowest counts first)
+        # keys_in_array is {key: (count, first_offset)}
         sorted_keys = sorted(
             keys_in_array.items(),
-            key=lambda x: len(x[1])
+            key=lambda x: x[1][0]  # Sort by count (first element of tuple)
         )
         
         # Log all keys with their counts for debugging
         LOG.debug("Array '%s': Key counts (sorted ascending):", array_key)
-        for idx, (key, offsets) in enumerate(sorted_keys):
-            LOG.debug("  [%d] '%s': %d occurrences", idx + 1, key, len(offsets))
+        for idx, (key, (count, _)) in enumerate(sorted_keys):
+            LOG.debug("  [%d] '%s': %d occurrences", idx + 1, key, count)
         
         # Select the N keys with lowest counts (comparative approach)
         num_keys_to_consider = min(num_rare_keys, len(sorted_keys))
@@ -444,23 +476,20 @@ def identify_rare_keys_by_array(
         
         # Filter to only include keys with count < 3 (absolute constraint)
         rare_keys_for_array = []
-        for key, offsets in candidate_keys:
-            count = len(offsets)
+        for key, (count, first_offset) in candidate_keys:
             if count < 3:
-                rare_keys_for_array.append((key, offsets))
+                rare_keys_for_array.append((key, count, first_offset))
             else:
                 LOG.debug("Key '%s' in array '%s' excluded from rare keys: %d occurrences (>= 3, not truly rare)",
                          key, array_key, count)
         
         rare_keys_by_array[array_key] = {}
-        for key, offsets in rare_keys_for_array:
+        for key, count, first_offset in rare_keys_for_array:
             # Store only the first occurrence offset (we only need one location per rare key)
-            first_offset = offsets[0] if offsets else None
-            if first_offset is not None:
-                rare_keys_by_array[array_key][key] = [first_offset]  # Store as list for compatibility
-                rank = sorted_keys.index((key, offsets)) + 1
-                LOG.info("Rare key '%s' in array '%s': %d total occurrences, using first at offset %d (ranked %d/%d by count)",
-                         key, array_key, len(offsets), first_offset, rank, len(sorted_keys))
+            rare_keys_by_array[array_key][key] = [first_offset]  # Store as list for compatibility
+            rank = next(i for i, (k, _) in enumerate(sorted_keys, 1) if k == key)
+            LOG.info("Rare key '%s' in array '%s': %d total occurrences, using first at offset %d (ranked %d/%d by count)",
+                     key, array_key, count, first_offset, rank, len(sorted_keys))
     
     total_rare_keys = sum(len(keys) for keys in rare_keys_by_array.values())
     LOG.info("Identified %d rare key(s) across %d array(s) (comparative approach: %d least common keys per array, filtered to count < 3)",
@@ -470,7 +499,7 @@ def identify_rare_keys_by_array(
 
 
 def log_key_statistics(
-    key_occurrences: Dict[str, List[int]],
+    key_occurrences: Dict[str, Tuple[int, int]],
     array_starts: Dict[str, int],
     rare_keys_by_array: Dict[str, Dict[str, List[int]]],
     num_rare_keys: int,
@@ -481,7 +510,7 @@ def log_key_statistics(
     Only shows top-level arrays (not nested arrays).
     
     Args:
-        key_occurrences: All key occurrences: {key: [offset1, offset2, ...]}
+        key_occurrences: Count and first occurrence: {key: (count, first_offset)}
         array_starts: Array start offsets: {array_key: start_offset}
         rare_keys_by_array: Dict of {array_key: {rare_key: [offsets]}}
         threshold: Frequency threshold used for rare key detection
@@ -497,46 +526,32 @@ def log_key_statistics(
         if top_level_key in array_starts:
             top_level_array_names.add(top_level_key)
     
+    # Pre-sort top-level arrays by offset for efficient lookup
+    top_level_arrays_sorted = sorted(
+        [(name, array_starts[name]) for name in top_level_array_names],
+        key=lambda x: x[1],
+        reverse=True  # Descending order for efficient lookup
+    )
+    
     # Group keys by top-level array only (not nested arrays)
-    # Only store first occurrence and count for logging
+    # Only store first occurrence and count for logging - use first occurrence to determine array
     top_level_keys: Dict[Optional[str], Dict[str, Tuple[int, int]]] = {}  # {array_key: {key: (first_offset, total_count)}}
     
-    for key, offsets in key_occurrences.items():
-        # Determine which top-level array each occurrence belongs to
-        occurrences_by_top_level: Dict[Optional[str], List[int]] = {}
+    for key, (total_count, first_offset) in key_occurrences.items():
+        # Use only the first occurrence to determine which top-level array this key belongs to
         
-        for offset in offsets:
-            # Find which array contains this offset
-            containing_array = find_array_for_key_offset(offset, array_starts)
-            
-            # If it's in a nested array, find the top-level array that contains it
-            top_level_array = None
-            if containing_array:
-                # Check if this is a top-level array
-                if containing_array in top_level_array_names:
-                    top_level_array = containing_array
-                else:
-                    # It's a nested array - find the top-level array that contains it
-                    # Find the top-level array with start offset before this offset
-                    best_top_level = None
-                    best_offset = -1
-                    for tl_array in top_level_array_names:
-                        tl_start = array_starts[tl_array]
-                        if tl_start < offset and tl_start > best_offset:
-                            best_offset = tl_start
-                            best_top_level = tl_array
-                    top_level_array = best_top_level
-            
-            if top_level_array not in occurrences_by_top_level:
-                occurrences_by_top_level[top_level_array] = []
-            occurrences_by_top_level[top_level_array].append(offset)
+        # Find the top-level array that contains this first occurrence
+        top_level_array = None
+        for tl_name, tl_start in top_level_arrays_sorted:
+            if tl_start < first_offset:
+                top_level_array = tl_name
+                break  # Found the best match (arrays are sorted descending)
         
-        # Store first occurrence and count for each top-level array
-        for top_level_array, array_offsets in occurrences_by_top_level.items():
-            if top_level_array not in top_level_keys:
-                top_level_keys[top_level_array] = {}
-            # Store (first_offset, total_count)
-            top_level_keys[top_level_array][key] = (array_offsets[0], len(array_offsets))
+        # Store first occurrence and count for this top-level array
+        if top_level_array not in top_level_keys:
+            top_level_keys[top_level_array] = {}
+        # Store (first_offset, total_count)
+        top_level_keys[top_level_array][key] = (first_offset, total_count)
     
     # Log statistics for each top-level section
     # Sort with None values first (non-array keys), then array keys alphabetically
@@ -584,11 +599,11 @@ def log_key_statistics(
     total_common_keys = total_keys - total_rare_keys
     
     # Count total rare key occurrences across top-level arrays only
+    # rare_keys_by_array stores {array_key: {rare_key: [first_offset]}}, so each has 1 occurrence
     total_rare_occurrences = sum(
-        len(offsets) 
+        len(keys) 
         for array_key, keys in rare_keys_by_array.items() 
         if array_key in top_level_array_names
-        for offsets in keys.values()
     )
     
     LOG.info("")
@@ -781,6 +796,29 @@ def read_span_between_offsets(
         return f.read(n)
     
     return f.read(max_bytes)
+
+
+def build_span_attempt_sizes(max_span_size: int) -> List[int]:
+    """
+    Build escalating span sizes up to max_span_size.
+
+    Example: max=16MB -> [2MB, 4MB, 8MB, 16MB]
+    """
+    if max_span_size <= 0:
+        raise ValueError("max_span_size must be > 0")
+
+    base_span = min(2 * 1024 * 1024, max_span_size)  # 2MB fast path
+    attempts: List[int] = []
+    span = base_span
+
+    while span < max_span_size:
+        attempts.append(span)
+        span *= 2
+
+    if not attempts or attempts[-1] != max_span_size:
+        attempts.append(max_span_size)
+
+    return attempts
 
 
 def extract_item_from_span_around_key(
@@ -977,6 +1015,12 @@ def extract_items_with_rare_keys(
     
     LOG.info("  Processing %d rare key(s) (one item per rare key)", len(rare_key_samples))
     
+    # Get file size (uncompressed) to ensure we don't read beyond the end
+    current_pos = f.tell()
+    f.seek(0, 2)  # SEEK_END
+    file_size = f.tell()
+    f.seek(current_pos)  # Restore position
+    
     # Try increasing padding sizes: 200KB, 500KB, 1MB
     padding_sizes = [204800, 512000, 1048576]  # 200KB, 500KB, 1MB
     
@@ -991,23 +1035,26 @@ def extract_items_with_rare_keys(
         for padding_size in padding_sizes:
             LOG.info("    Trying padding: %d KB", padding_size // 1024)
             
-            # Read span around rare key
-            span_start = rare_key_offset - padding_size
-            span_end = rare_key_offset + padding_size
+            # Read span around rare key, clamping to file boundaries
+            span_start = max(0, rare_key_offset - padding_size)
+            span_end = min(file_size, rare_key_offset + padding_size)
+            
+            # Adjust key offset in span if we had to clamp the start
+            key_offset_in_span = rare_key_offset - span_start
             
             span = read_span_between_offsets(
                 f,
                 span_start,
                 span_end,
                 extra=0,
-                max_bytes=padding_size * 2,
+                max_bytes=span_end - span_start,
             )
             
             actual_span_size = len(span)
-            LOG.info("    Read span: %d bytes (expected: %d bytes)", actual_span_size, padding_size * 2)
+            LOG.info("    Read span: %d bytes (expected: %d bytes, start: %d, end: %d)", 
+                    actual_span_size, span_end - span_start, span_start, span_end)
             
             # Extract item
-            key_offset_in_span = padding_size
             item = extract_item_from_span_around_key(
                 span,
                 rare_key_name,
@@ -1209,19 +1256,67 @@ def process_single_key_with_rare_keys(
     Returns:
         Number of records created for this key
     """
+    LOG.info(
+        "Starting key processing: key='%s', key_offset=%d, next_key_offset=%s",
+        key_name,
+        key_offset,
+        str(next_key_offset) if next_key_offset is not None else "None",
+    )
     f = open_with_existing_index(str(input_path), str(index_path))
     
     try:
-        end = next_key_offset
-        if end is not None:
-            span_size = end - key_offset
-            if span_size > max_span_size:
-                end = key_offset + max_span_size
-        
-        span = read_span_between_offsets(f, key_offset, end, extra=512, max_bytes=max_span_size)
-        val, array_start_offset = extract_scalar_or_first_n_from_span(
-            key_name, span, n=max_array_items, key_offset=key_offset
-        )
+        span_attempt_sizes = build_span_attempt_sizes(max_span_size)
+        val: Optional[Any] = None
+        array_start_offset: Optional[int] = None
+
+        for attempt_idx, attempt_size in enumerate(span_attempt_sizes, 1):
+            end = next_key_offset
+            if end is not None:
+                span_to_next_key = end - key_offset
+                if span_to_next_key > attempt_size:
+                    end = key_offset + attempt_size
+
+            LOG.info(
+                "Reading span for key '%s' (attempt %d/%d): start=%d, end=%s, span_size=%d",
+                key_name,
+                attempt_idx,
+                len(span_attempt_sizes),
+                key_offset,
+                str(end) if end is not None else "None",
+                attempt_size,
+            )
+            span = read_span_between_offsets(f, key_offset, end, extra=512, max_bytes=attempt_size)
+            LOG.info("Read span for key '%s' (attempt %d): %d bytes", key_name, attempt_idx, len(span))
+            LOG.info("Extracting value for key '%s' from span (attempt %d)...", key_name, attempt_idx)
+            val, array_start_offset = extract_scalar_or_first_n_from_span(
+                key_name, span, n=max_array_items, key_offset=key_offset
+            )
+
+            if val is not None:
+                LOG.info(
+                    "Extracted value for key '%s' on attempt %d: type=%s, array_start_offset=%s",
+                    key_name,
+                    attempt_idx,
+                    type(val).__name__,
+                    str(array_start_offset) if array_start_offset is not None else "None",
+                )
+                break
+
+            # If current span already reaches the next key boundary, larger spans won't help.
+            if next_key_offset is not None and (next_key_offset - key_offset) <= attempt_size:
+                LOG.warning(
+                    "Extraction failed for key '%s' at full key span on attempt %d; stopping retries",
+                    key_name,
+                    attempt_idx,
+                )
+                break
+
+            LOG.warning(
+                "Extraction failed for key '%s' on attempt %d with span_size=%d; escalating",
+                key_name,
+                attempt_idx,
+                attempt_size,
+            )
         
         if val is None:
             LOG.warning("Could not extract value for key '%s'", key_name)
@@ -1413,6 +1508,7 @@ def process_single_key_with_rare_keys(
             increment_record_count()
             records_created += 1
         
+        LOG.info("Finished key processing: key='%s', records_created=%d", key_name, records_created)
         return records_created
         
     finally:
@@ -1455,6 +1551,13 @@ def ingest_file_indexed_gzip_rare_keys(
     Returns:
         0 on success, 1 on error
     """
+    if num_key_threads != 1:
+        LOG.info(
+            "num_key_threads=%d requested, overriding to 1 to avoid key-processing thread contention",
+            num_key_threads,
+        )
+    num_key_threads = 1
+
     if not file_path.exists():
         LOG.error("File not found: %s", file_path)
         return 1
@@ -1505,13 +1608,29 @@ def ingest_file_indexed_gzip_rare_keys(
             return 1
         
         # Step 1: Build or use existing index
-        if not index_path.exists():
-            LOG.info("Index file not found, building index...")
+        # If index exists, try to use it, but rebuild if it's corrupted
+        index_valid = False
+        if index_path.exists():
+            try:
+                # Try to open and validate the index
+                test_f = open_with_existing_index(str(file_path), str(index_path))
+                test_f.close()
+                index_valid = True
+                LOG.info("Using existing index: %s", index_path)
+            except Exception as index_exc:  # noqa: BLE001
+                # Index is corrupted or doesn't match, rebuild it
+                LOG.warning("Existing index is corrupted or invalid (%s), rebuilding: %s", 
+                           type(index_exc).__name__, index_path)
+                try:
+                    index_path.unlink()
+                except Exception:  # noqa: BLE001
+                    pass  # Ignore if we can't delete it
+        
+        if not index_path.exists() or not index_valid:
+            LOG.info("Building index...")
             t0 = time.perf_counter()
             build_and_export_index(str(file_path), str(index_path))
             build_index_time += time.perf_counter() - t0
-        else:
-            LOG.info("Using existing index: %s", index_path)
         
         # Step 2: Scan for keys with occurrence tracking
         LOG.info("Scanning for keys and tracking occurrences...")
@@ -1565,29 +1684,51 @@ def ingest_file_indexed_gzip_rare_keys(
         
         # Thread-safe batch writing and record counting
         batch_lock = threading.Lock()
+        pending_batch = io.StringIO()
+        pending_batch_rows = 0
         record_count = 0
         record_count_lock = threading.Lock()
+
+        def _flush_pending_batch_locked() -> None:
+            """Flush accumulated rows to database. Caller must hold batch_lock."""
+            nonlocal copy_time, pending_batch_rows
+            if pending_batch_rows == 0:
+                return
+
+            pending_batch.seek(0)
+            try:
+                copy_start = time.perf_counter()
+                cursor.copy_expert(
+                    """
+                    COPY mrf_landing(source_name, file_name, file_size, record_type, record_index, payload, payload_size, array_start_offset, has_rare_keys)
+                    FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', QUOTE '"', NULL '\\N')
+                    """,
+                    pending_batch,
+                )
+                copy_time += time.perf_counter() - copy_start
+            except Exception as exc:  # noqa: BLE001
+                LOG.exception("Error flushing batched rows to database: %s", exc)
+                raise
+            finally:
+                pending_batch.seek(0)
+                pending_batch.truncate(0)
+                pending_batch_rows = 0
         
         def write_batch_to_db(batch_data: io.StringIO) -> None:
-            """Thread-safe function to write a batch of records to database using COPY FROM."""
-            nonlocal copy_time
+            """Thread-safe function to append rows and flush to DB when batch threshold is reached."""
+            nonlocal pending_batch_rows
             batch_data.seek(0)
             content = batch_data.getvalue()
             if not content or len(content.strip()) == 0:
                 return
             
-            batch_data.seek(0)
             with batch_lock:
                 try:
-                    copy_start = time.perf_counter()
-                    cursor.copy_expert(
-                        """
-                        COPY mrf_landing(source_name, file_name, file_size, record_type, record_index, payload, payload_size, array_start_offset, has_rare_keys)
-                        FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', QUOTE '"', NULL '\\N')
-                        """,
-                        batch_data,
-                    )
-                    copy_time += time.perf_counter() - copy_start
+                    pending_batch.write(content)
+                    pending_batch_rows += content.count("\n")
+
+                    if pending_batch_rows >= max(1, batch_size):
+                        _flush_pending_batch_locked()
                 except Exception as exc:  # noqa: BLE001
                     LOG.exception("Error writing batch to database: %s", exc)
                     raise
@@ -1686,6 +1827,10 @@ def ingest_file_indexed_gzip_rare_keys(
                     except Exception as exc:  # noqa: BLE001
                         LOG.error("Key '%s' failed with exception: %s", key_name, exc, exc_info=True)
             process_time += time.perf_counter() - process_start
+
+        # Flush any buffered rows that did not reach batch_size.
+        with batch_lock:
+            _flush_pending_batch_locked()
         
         if show_progress:
             pbar.close()

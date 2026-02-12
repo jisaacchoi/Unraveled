@@ -10,7 +10,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import indexed_gzip
 import psycopg2
@@ -156,152 +156,10 @@ def get_array_start_offsets_from_mrf_landing(
         return {}
 
 
-def get_array_next_level_keys(
-    cursor: "psycopg2.extensions.cursor",
-    file_name: str,
-    array_key: str,
-) -> Set[str]:
-    """
-    Query mrf_analysis for all next-level keys (level 2) for a given top-level array.
-    These are the keys that should appear in each array item for completeness checking.
-    
-    Note: Top-level array is at level 0, array items are at level 1, and keys within items are at level 2.
-    
-    Args:
-        cursor: PostgreSQL cursor (connection should already be established)
-        file_name: File name to query
-        array_key: Top-level array key name (e.g., 'in_network')
-        
-    Returns:
-        Set of next-level key names that should appear in each array item
-    """
-    try:
-        # Query for level 2 records where top_level_key matches the array key
-        # Level 0 = top-level array key (e.g., 'in_network')
-        # Level 1 = array items (e.g., 'in_network[0]._listvalue_')
-        # Level 2 = keys within array items (e.g., 'in_network[0]._listvalue_[0].name')
-        cursor.execute("""
-            SELECT DISTINCT key
-            FROM mrf_analysis
-            WHERE file_name = %s
-              AND top_level_key = %s
-              AND level = 2
-              AND path LIKE %s
-            ORDER BY key
-        """, (file_name, array_key, f"{array_key}[%"))
-        
-        rows = cursor.fetchall()
-        next_level_keys = {row[0] for row in rows}
-        
-        LOG.debug("Found %d next-level key(s) for array '%s': %s", len(next_level_keys), array_key, sorted(next_level_keys))
-        return next_level_keys
-        
-    except Exception as exc:  # noqa: BLE001
-        LOG.exception("Error querying next-level keys from mrf_analysis: %s", exc)
-        return set()
-
-
-def check_item_completeness(
-    item_bytes: bytes,
-    next_level_keys: Set[str],
-    min_key_threshold: float = 0.5,  # Minimum ratio of expected keys that must be present (50% default)
-) -> bool:
-    """
-    Check if an array item is complete by verifying structural completeness and key presence.
-    
-    An item is complete if:
-    1. It is structurally complete (balanced braces, valid JSON) - REQUIRED
-    2. It contains at least min_key_threshold ratio of expected keys - ADVISORY (logged if below threshold)
-    
-    Args:
-        item_bytes: Bytes containing the array item (should be a JSON object)
-        next_level_keys: Set of key names that should appear in the item (empty set means skip key checking)
-        min_key_threshold: Minimum ratio (0.0-1.0) of expected keys that should be present (default: 0.5 = 50%)
-        
-    Returns:
-        True if item is structurally complete, False otherwise
-    """
-    if not item_bytes:
-        return False
-    
-    try:
-        # Decode bytes to string
-        item_text = item_bytes.decode("utf-8", errors="replace").strip()
-        # Remove trailing comma if present (common in array contexts)
-        if item_text.endswith(","):
-            item_text = item_text[:-1].strip()
-        
-        # PHASE 1: Structural completeness check (REQUIRED)
-        # Check that the item is properly closed
-        open_braces = item_text.count("{")
-        close_braces = item_text.count("}")
-        
-        # For a complete item, we should have balanced braces
-        if not item_text.endswith("}"):
-            LOG.debug("Item incomplete: does not end with '}'")
-            return False
-        
-        # Check that braces are balanced
-        if open_braces != close_braces:
-            LOG.debug("Item incomplete: unbalanced braces (open: %d, close: %d)", open_braces, close_braces)
-            return False
-        
-        # Verify the item can be parsed as valid JSON
-        try:
-            json.loads(item_text)
-        except json.JSONDecodeError:
-            LOG.debug("Item incomplete: cannot parse as valid JSON")
-            return False
-        
-        # PHASE 2: Key presence check (ADVISORY - logs warning if below threshold)
-        if next_level_keys:
-            # Count how many expected keys are present
-            keys_found = 0
-            missing_keys = []
-            
-            for key in next_level_keys:
-                # Look for the key pattern: "key":
-                key_pattern = f'"{key}"'
-                if key_pattern in item_text:
-                    keys_found += 1
-                else:
-                    missing_keys.append(key)
-            
-            # Calculate ratio of keys found
-            key_ratio = keys_found / len(next_level_keys)
-            
-            # Log warning if below threshold
-            if key_ratio < min_key_threshold:
-                LOG.warning(
-                    "Item has low key coverage: %d/%d expected keys found (%.1f%% < %.1f%% threshold). Missing: %s",
-                    keys_found,
-                    len(next_level_keys),
-                    key_ratio * 100,
-                    min_key_threshold * 100,
-                    missing_keys[:5] if len(missing_keys) > 5 else missing_keys,  # Show first 5 missing keys
-                )
-            elif keys_found < len(next_level_keys):
-                # Some keys missing but above threshold - log at debug level
-                LOG.debug(
-                    "Item missing some expected keys: %d/%d found. Missing: %s",
-                    keys_found,
-                    len(next_level_keys),
-                    missing_keys[:3] if len(missing_keys) > 3 else missing_keys,
-                )
-        
-        # Item is structurally complete (and key check passed or was advisory)
-        return True
-        
-    except Exception as exc:  # noqa: BLE001
-        LOG.debug("Error checking item completeness: %s", exc)
-        return False
-
-
 def extract_complete_array_items(
     span_bytes: bytes,
-    next_level_keys: Set[str],
     start_offset: int = 0,
-) -> Tuple[List[bytes], int]:
+) -> Tuple[List[Tuple[Any, int]], int]:
     """
     Extract complete array items from a byte span.
     
@@ -310,17 +168,16 @@ def extract_complete_array_items(
     
     Args:
         span_bytes: Bytes containing part of an array
-        next_level_keys: Set of key names that should appear in each item
         start_offset: Starting offset within span_bytes (for tracking position)
         
     Returns:
-        Tuple of (list of complete item byte strings, end_offset)
+        Tuple of (list of parsed items with their raw byte sizes, end_offset)
         - end_offset: Position after the last complete item (relative to start_offset)
     """
     if not span_bytes:
         return [], 0
     
-    complete_items = []
+    complete_items: List[Tuple[Any, int]] = []
     decoder = json.JSONDecoder()
     span_text = span_bytes.decode("utf-8", errors="replace")
     current_pos = 0
@@ -360,25 +217,19 @@ def extract_complete_array_items(
             # Extract the bytes for this item
             item_end = current_pos + consumed
             item_bytes = span_bytes[current_pos:item_end]
-            
-            # Check if this item is complete
-            if check_item_completeness(item_bytes, next_level_keys):
-                complete_items.append(item_bytes)
-                current_pos = item_end
-                
-                # Skip whitespace after the item
+            item_size = len(item_bytes)
+            complete_items.append((convert_decimals(value), item_size))
+            current_pos = item_end
+
+            # Skip whitespace after the item
+            current_pos = skip_whitespace(current_pos)
+
+            # Check for comma separator
+            if current_pos < len(span_text) and span_text[current_pos] == ",":
+                current_pos += 1
                 current_pos = skip_whitespace(current_pos)
-                
-                # Check for comma separator
-                if current_pos < len(span_text) and span_text[current_pos] == ",":
-                    current_pos += 1
-                    current_pos = skip_whitespace(current_pos)
-                elif current_pos < len(span_text) and span_text[current_pos] == "]":
-                    # End of array, but item is complete
-                    break
-            else:
-                # Item is incomplete, stop here
-                LOG.debug("Incomplete item found at position %d, stopping extraction", current_pos)
+            elif current_pos < len(span_text) and span_text[current_pos] == "]":
+                # End of array, but item is complete
                 break
                 
         except json.JSONDecodeError as e:
@@ -393,10 +244,79 @@ def extract_complete_array_items(
     return complete_items, current_pos
 
 
+def read_adaptive_chunk(
+    f: indexed_gzip.IndexedGzipFile,
+    start_offset: int,
+    target_items: int = 50,  # Target number of items to extract
+    min_chunk_size: int = 1 * 1024 * 1024,  # Minimum 1MB
+    max_chunk_size: int = 16 * 1024 * 1024,  # Maximum 16MB
+    end_offset: Optional[int] = None,
+) -> Tuple[bytes, int]:
+    """
+    Read chunk adaptively based on target number of items (Optimization #4).
+    
+    Strategy:
+    1. Start with minimum chunk size
+    2. Read incrementally until we have enough complete items (approximate)
+    3. Stop if we hit max chunk size or end of array
+    
+    Args:
+        f: IndexedGzipFile handle
+        start_offset: Starting byte offset
+        target_items: Target number of items to extract
+        min_chunk_size: Minimum chunk size in bytes
+        max_chunk_size: Maximum chunk size in bytes
+        end_offset: Optional end offset (end of array)
+        
+    Returns:
+        Tuple of (chunk_bytes, actual_end_offset)
+    """
+    f.seek(start_offset)
+    chunk = b""
+    current_offset = start_offset
+    
+    # Read in increments
+    increment_size = min_chunk_size  # 1MB increments
+    
+    while len(chunk) < max_chunk_size:
+        # Determine how much to read
+        if end_offset is not None:
+            remaining = end_offset - current_offset
+            if remaining <= 0:
+                break
+            read_size = min(increment_size, remaining)
+        else:
+            read_size = increment_size
+        
+        if read_size <= 0:
+            break
+        
+        # Read increment
+        new_data = f.read(read_size)
+        if not new_data:
+            break
+        
+        chunk += new_data
+        current_offset += len(new_data)
+        
+        # Quick check: Count complete items (fast approximation)
+        # Look for pattern: }, followed by whitespace/comma, followed by {
+        # This is approximate but fast
+        item_separators = chunk.count(b'},\n') + chunk.count(b'}, ')
+        if item_separators >= target_items:
+            # We likely have enough items
+            break
+        
+        # If we're at the end, stop
+        if end_offset is not None and current_offset >= end_offset:
+            break
+    
+    return chunk, current_offset
+
+
 def process_single_array(
     array_key: str,
     array_start: int,
-    next_level_keys: Set[str],
     input_path: Path,
     index_path: Path,
     output_dir: Path,
@@ -407,6 +327,8 @@ def process_single_array(
     add_to_progress: Callable[[int], Tuple[int, float]],  # Returns (cumulative_size, progress_pct)
     original_file_size: int,
     log_chunk_progress: bool = False,  # If True, log detailed chunk-level progress
+    adaptive_chunk_target_items: int = 50,  # Target number of items per chunk (Optimization #4)
+    adaptive_chunk_min_size: int = 1 * 1024 * 1024,  # Minimum chunk size in bytes (Optimization #4)
 ) -> int:
     """
     Process a single array in a thread-safe manner.
@@ -417,7 +339,6 @@ def process_single_array(
     Args:
         array_key: Name of the array key (e.g., 'in_network')
         array_start: Byte offset where the array starts in the file
-        next_level_keys: Set of keys that should appear in array items
         input_path: Path to input JSON.gz file
         index_path: Path to .gzi index file
         output_dir: Directory to write output files
@@ -444,7 +365,8 @@ def process_single_array(
         
         # Read array in chunks
         current_offset = array_start
-        items_buffer = []  # List of (item_bytes, parsed_item) tuples
+        carryover = b""  # Unconsumed tail from previous iteration
+        items_buffer: List[Tuple[Any, int]] = []  # (parsed_item, raw_item_size_bytes)
         buffer_cumulative_size = 0  # Cumulative size of items in buffer (bytes)
         
         iteration = 0
@@ -454,25 +376,14 @@ def process_single_array(
                 LOG.info("Iteration %d: Reading chunk from offset %d (chunk_size: %d) for array '%s'", 
                         iteration, current_offset, chunk_read_bytes, array_key)
             
-            # Determine how much to read
-            if array_end is not None:
-                remaining = array_end - current_offset
-                read_size = min(chunk_read_bytes, remaining)
-            else:
-                read_size = chunk_read_bytes
-            
-            if read_size <= 0:
-                if log_chunk_progress:
-                    LOG.info("Read size is 0 or negative, breaking loop for array '%s'", array_key)
-                break
-            
-            # Read chunk
-            span = read_span_between_offsets(
+            # Read chunk adaptively (Optimization #4: adaptive chunk sizing)
+            span, actual_end = read_adaptive_chunk(
                 f,
                 current_offset,
-                array_end if array_end is not None and (array_end - current_offset) <= chunk_read_bytes else None,
-                extra=512,
-                max_bytes=chunk_read_bytes,
+                target_items=adaptive_chunk_target_items,
+                min_chunk_size=adaptive_chunk_min_size,
+                max_chunk_size=chunk_read_bytes,
+                end_offset=array_end,
             )
             
             if not span:
@@ -481,13 +392,28 @@ def process_single_array(
                 break
             
             if log_chunk_progress:
-                LOG.info("Read %d bytes from offset %d for array '%s'", len(span), current_offset, array_key)
+                LOG.info("Read %d bytes from offset %d for array '%s' (adaptive chunk)", len(span), current_offset, array_key)
+
+            # Keep partial trailing data and prepend it to the next read.
+            # This avoids re-reading overlapping half-chunks.
+            carryover_prefix_len = len(carryover)
+            if carryover:
+                span = carryover + span
+                if log_chunk_progress:
+                    LOG.info(
+                        "Prepended %d carry-over bytes for array '%s' (combined span: %d bytes)",
+                        carryover_prefix_len,
+                        array_key,
+                        len(span),
+                    )
+                carryover = b""
             
             # Extract complete items from this chunk
             complete_items, relative_end = extract_complete_array_items(
                 span,
-                next_level_keys,
             )
+            if relative_end < len(span):
+                carryover = span[relative_end:]
             
             if log_chunk_progress:
                 LOG.info("Extracted %d complete item(s) from chunk for array '%s' (relative_end: %d, total in buffer: %d)", 
@@ -496,7 +422,9 @@ def process_single_array(
             if not complete_items:
                 # No complete items found, might be at the end or incomplete
                 span_text = span.decode("utf-8", errors="replace")
-                if "]" in span_text:
+                # Only treat as end-of-array when the next significant token is ']'.
+                # A raw ']' may appear inside nested content and should not terminate parsing.
+                if span_text.lstrip().startswith("]"):
                     # We've reached the end of the array
                     if log_chunk_progress:
                         LOG.info("Found closing bracket ']' in span, reached end of array '%s' (buffer has %d items)", 
@@ -506,117 +434,92 @@ def process_single_array(
                             LOG.info("Breaking loop but have %d items in buffer for array '%s', will write them at end", 
                                     len(items_buffer), array_key)
                     break
-                
-                # If there's more data available, continue reading
-                if array_end is None or (array_end - current_offset) > len(span):
-                    if log_chunk_progress:
-                        LOG.info("No complete items found but more data available for array '%s', advancing offset by %d (buffer has %d items)", 
-                                array_key, len(span) // 2, len(items_buffer))
-                    current_offset += len(span) // 2
-                    continue
-                else:
-                    if log_chunk_progress:
-                        LOG.info("No complete items found and at end of data for array '%s', breaking loop (buffer has %d items)", 
-                                array_key, len(items_buffer))
-                    break
+                if log_chunk_progress:
+                    LOG.info(
+                        "No complete items found for array '%s'; preserving %d carry-over bytes and continuing",
+                        array_key,
+                        len(carryover),
+                    )
+                # Keep reading additional bytes and let carry-over accumulate until items complete.
+                current_offset = actual_end if actual_end > current_offset else (current_offset + 1)
+                continue
             
-            # Add items to buffer and track cumulative size
-            for item_bytes in complete_items:
-                try:
-                    item_text = item_bytes.decode("utf-8", errors="replace")
-                    parsed_item = json.loads(item_text)
-                    items_buffer.append((item_bytes, parsed_item))
-                    buffer_cumulative_size += len(item_bytes)
-                except Exception as exc:  # noqa: BLE001
-                    LOG.warning("Failed to parse item during extraction for array '%s': %s", array_key, exc)
-                    items_buffer.append((item_bytes, None))
-                    buffer_cumulative_size += len(item_bytes)
+            # Add items to buffer and write incrementally (Optimization #3: streaming writes)
+            for parsed_item, item_size in complete_items:
+                items_buffer.append((parsed_item, item_size))
+                buffer_cumulative_size += item_size
+                
+                # Write incrementally when threshold reached (Optimization #3)
+                if buffer_cumulative_size >= size_per_file_bytes:
+                    # Find how many items we can write without exceeding threshold
+                    wrapper_overhead = 1024
+                    available_size = size_per_file_bytes - wrapper_overhead
+                    
+                    items_to_write_count = 0
+                    cumulative_size_for_file = 0
+                    
+                    for _, item_size in items_buffer:
+                        if cumulative_size_for_file + item_size > available_size:
+                            break
+                        cumulative_size_for_file += item_size
+                        items_to_write_count += 1
+                    
+                    # Ensure we write at least one item
+                    if items_to_write_count == 0 and items_buffer:
+                        items_to_write_count = 1
+                        cumulative_size_for_file = items_buffer[0][1]
+                    
+                    if items_to_write_count > 0:
+                        LOG.info("Buffer reached threshold (%.2f MB), writing file with %d items for array '%s'...", 
+                                cumulative_size_for_file / (1024 * 1024), items_to_write_count, array_key)
+                        
+                        # Get next part number (thread-safe)
+                        part_num = get_next_part_num()
+                        part_path = output_dir / f"{stem}_part{part_num:04d}.json.gz"
+                        
+                        # Items are already parsed in extract_complete_array_items().
+                        items_to_write = [item for item, _ in items_buffer[:items_to_write_count]]
+                        
+                        # Write array chunk
+                        if items_to_write:
+                            output_data = {array_key: items_to_write}
+                            
+                            with gzip.open(part_path, "wt", encoding="utf-8") as f_out:
+                                json.dump(output_data, f_out)
+                                f_out.flush()  # Ensure data is written to disk
+                                if hasattr(f_out, 'fileobj') and hasattr(f_out.fileobj, 'flush'):
+                                    f_out.fileobj.flush()  # Flush underlying file object
+                            
+                            files_created_for_array += 1
+                            # Read file size after ensuring it's flushed
+                            part_file_size = part_path.stat().st_size
+                            if part_file_size == 0:
+                                LOG.warning("Part file %s has size 0, this may indicate a write issue", part_path.name)
+                            cumulative_part_size, progress_pct = add_to_progress(part_file_size)
+                            
+                            LOG.info(
+                                "Created %s with %d items (%.2f MB uncompressed, %.2f MB compressed) from array '%s' | Progress: %.1f%% (%.2f GB / %.2f GB)",
+                                part_path.name,
+                                len(items_to_write),
+                                cumulative_size_for_file / (1024 * 1024),
+                                part_file_size / (1024 * 1024),
+                                array_key,
+                                progress_pct,
+                                cumulative_part_size / (1024**3),
+                                original_file_size / (1024**3),
+                            )
+                            
+                            # Remove written items from buffer (Optimization #3: streaming writes)
+                            items_buffer = items_buffer[items_to_write_count:]
+                            buffer_cumulative_size -= cumulative_size_for_file
             
             if log_chunk_progress:
                 LOG.info("After adding items: buffer now has %d items (%.2f MB / %.2f MB threshold) for array '%s'",
                         len(items_buffer), buffer_cumulative_size / (1024 * 1024), size_per_file_bytes / (1024 * 1024), array_key)
             
-            # Update current offset
-            current_offset = current_offset + relative_end
-            
-            # Write files when buffer cumulative size reaches threshold
-            while buffer_cumulative_size >= size_per_file_bytes:
-                # Find how many items we can write without exceeding threshold
-                wrapper_overhead = 1024
-                available_size = size_per_file_bytes - wrapper_overhead
-                
-                items_to_write_count = 0
-                cumulative_size_for_file = 0
-                
-                for item_bytes, parsed_item in items_buffer:
-                    item_size = len(item_bytes)
-                    if cumulative_size_for_file + item_size > available_size:
-                        break
-                    cumulative_size_for_file += item_size
-                    items_to_write_count += 1
-                
-                # Ensure we write at least one item
-                if items_to_write_count == 0 and items_buffer:
-                    items_to_write_count = 1
-                    cumulative_size_for_file = len(items_buffer[0][0])
-                
-                if items_to_write_count == 0:
-                    break
-                
-                LOG.info("Buffer reached threshold (%.2f MB), writing file with %d items for array '%s'...", 
-                        cumulative_size_for_file / (1024 * 1024), items_to_write_count, array_key)
-                
-                # Get next part number (thread-safe)
-                part_num = get_next_part_num()
-                part_path = output_dir / f"{stem}_part{part_num:04d}.json.gz"
-                
-                # Use pre-parsed items if available
-                items_to_write = []
-                for item_bytes, parsed_item in items_buffer[:items_to_write_count]:
-                    if parsed_item is not None:
-                        items_to_write.append(convert_decimals(parsed_item))
-                    else:
-                        try:
-                            item_text = item_bytes.decode("utf-8", errors="replace")
-                            item = json.loads(item_text)
-                            items_to_write.append(convert_decimals(item))
-                        except Exception as exc:  # noqa: BLE001
-                            LOG.warning("Failed to parse item for array '%s': %s", array_key, exc)
-                            continue
-                
-                # Write array chunk
-                output_data = {array_key: items_to_write}
-                
-                with gzip.open(part_path, "wt", encoding="utf-8") as f_out:
-                    json.dump(output_data, f_out)
-                    f_out.flush()  # Ensure data is written to disk
-                    if hasattr(f_out, 'fileobj') and hasattr(f_out.fileobj, 'flush'):
-                        f_out.fileobj.flush()  # Flush underlying file object
-                
-                files_created_for_array += 1
-                # Read file size after ensuring it's flushed
-                part_file_size = part_path.stat().st_size
-                if part_file_size == 0:
-                    LOG.warning("Part file %s has size 0, this may indicate a write issue", part_path.name)
-                cumulative_part_size, progress_pct = add_to_progress(part_file_size)
-                
-                LOG.info(
-                    "Created %s with %d items (%.2f MB uncompressed, %.2f MB compressed) from array '%s' | Progress: %.1f%% (%.2f GB / %.2f GB)",
-                    part_path.name,
-                    len(items_to_write),
-                    cumulative_size_for_file / (1024 * 1024),
-                    part_file_size / (1024 * 1024),
-                    array_key,
-                    progress_pct,
-                    cumulative_part_size / (1024**3),
-                    original_file_size / (1024**3),
-                )
-                
-                # Remove written items from buffer
-                written_items = items_buffer[:items_to_write_count]
-                items_buffer = items_buffer[items_to_write_count:]
-                for item_bytes, _ in written_items:
-                    buffer_cumulative_size -= len(item_bytes)
+            # Always advance to the end of newly-read bytes.
+            # Any unconsumed trailing bytes are kept in carry-over.
+            current_offset = actual_end if actual_end > current_offset else (current_offset + 1)
             
             # Check if we've reached the end of the array
             if array_end is not None and current_offset >= array_end:
@@ -629,25 +532,13 @@ def process_single_array(
         if items_buffer:
             part_num = get_next_part_num()
             part_path = output_dir / f"{stem}_part{part_num:04d}.json.gz"
-            
-            items_to_write = []
-            for item_bytes, parsed_item in items_buffer:
-                if parsed_item is not None:
-                    items_to_write.append(convert_decimals(parsed_item))
-                else:
-                    try:
-                        item_text = item_bytes.decode("utf-8", errors="replace")
-                        item = json.loads(item_text)
-                        items_to_write.append(convert_decimals(item))
-                    except Exception as exc:  # noqa: BLE001
-                        LOG.warning("Failed to parse item for array '%s': %s", array_key, exc)
-                        continue
+            items_to_write = [item for item, _ in items_buffer]
             
             if items_to_write:
                 output_data = {array_key: items_to_write}
                 
                 # Calculate uncompressed size before writing
-                part_file_size_uncompressed = sum(len(item_bytes) for item_bytes, _ in items_buffer)
+                part_file_size_uncompressed = sum(item_size for _, item_size in items_buffer)
                 
                 with gzip.open(part_path, "wt", encoding="utf-8") as f_out:
                     json.dump(output_data, f_out)
@@ -695,6 +586,8 @@ def split_json_gz_with_indexed_gzip(
     file_name: Optional[str] = None,
     num_array_threads: int = 1,  # Number of threads for processing arrays in parallel (1 = sequential)
     log_chunk_progress: bool = False,  # If True, log detailed chunk-level progress (iteration, bytes read, items extracted)
+    adaptive_chunk_target_items: int = 50,  # Target number of items per chunk (Optimization #4)
+    adaptive_chunk_min_size: int = 1 * 1024 * 1024,  # Minimum chunk size in bytes (Optimization #4)
 ) -> int:
     """
     Split a large JSON.gz file using indexed_gzip for efficient random access.
@@ -871,9 +764,6 @@ def split_json_gz_with_indexed_gzip(
                          part_file_size / (1024 * 1024), old_cumulative / (1024**3), cumulative_part_size / (1024**3), progress_pct)
                 return cumulative_part_size, progress_pct
         
-        # Cache for next-level keys (optimization #4) - keyed by (file_name, array_key)
-        next_level_keys_cache: Dict[Tuple[str, str], Set[str]] = {}
-        
         # Prepare array processing tasks
         array_tasks = []
         for array_key in array_keys:
@@ -881,30 +771,21 @@ def split_json_gz_with_indexed_gzip(
                 LOG.warning("Array key '%s' not found in array_start_offsets, skipping", array_key)
                 continue
             
-            # Get next-level keys for completeness checking (with caching)
-            cache_key = (db_file_name, array_key)
-            if cache_key not in next_level_keys_cache:
-                LOG.info("Getting next-level keys for array '%s'...", array_key)
-                next_level_keys_cache[cache_key] = get_array_next_level_keys(cursor, db_file_name, array_key)
-            next_level_keys = next_level_keys_cache[cache_key]
-            LOG.info("Found %d next-level key(s) for array '%s': %s", len(next_level_keys), array_key, sorted(next_level_keys) if next_level_keys else "none")
-            
             # Get array start from stored offset
             array_start = array_start_offsets[array_key]
             
             # Add task to list
-            array_tasks.append((array_key, array_start, next_level_keys))
+            array_tasks.append((array_key, array_start))
         
         # Step 5: Process arrays (sequentially or in parallel based on num_array_threads)
         LOG.info("Step 5: Processing %d array(s) with %d thread(s)...", len(array_tasks), num_array_threads)
         
         if num_array_threads == 1 or len(array_tasks) == 1:
             # Sequential processing (backward compatible)
-            for array_key, array_start, next_level_keys in array_tasks:
+            for array_key, array_start in array_tasks:
                 files_created += process_single_array(
                     array_key=array_key,
                     array_start=array_start,
-                    next_level_keys=next_level_keys,
                     input_path=input_path,
                     index_path=index_path,
                     output_dir=output_dir,
@@ -915,6 +796,8 @@ def split_json_gz_with_indexed_gzip(
                     add_to_progress=add_to_progress,
                     original_file_size=original_file_size,
                     log_chunk_progress=log_chunk_progress,
+                    adaptive_chunk_target_items=adaptive_chunk_target_items,
+                    adaptive_chunk_min_size=adaptive_chunk_min_size,
                 )
         else:
             # Parallel processing with ThreadPoolExecutor
@@ -928,7 +811,6 @@ def split_json_gz_with_indexed_gzip(
                         process_single_array,
                         array_key=array_key,
                         array_start=array_start,
-                        next_level_keys=next_level_keys,
                         input_path=input_path,
                         index_path=index_path,
                         output_dir=output_dir,
@@ -939,8 +821,10 @@ def split_json_gz_with_indexed_gzip(
                         add_to_progress=add_to_progress,
                         original_file_size=original_file_size,
                         log_chunk_progress=log_chunk_progress,
+                        adaptive_chunk_target_items=adaptive_chunk_target_items,
+                        adaptive_chunk_min_size=adaptive_chunk_min_size,
                     ): array_key
-                    for array_key, array_start, next_level_keys in array_tasks
+                    for array_key, array_start in array_tasks
                 }
                 
                 # Collect results as they complete

@@ -11,12 +11,3 @@ CREATE TABLE IF NOT EXISTS mrf_landing (
     array_start_offset bigint,         -- Byte offset of the opening '[' for array items (NULL for non-arrays)
     has_rare_keys boolean DEFAULT FALSE -- NEW: Flag indicating if this item contains rare keys
 );
-
--- Index for efficient lookups by array start offset
-CREATE INDEX IF NOT EXISTS idx_mrf_landing_array_start_offset ON mrf_landing(array_start_offset) WHERE array_start_offset IS NOT NULL;
-
--- Index for finding items with rare keys
-CREATE INDEX IF NOT EXISTS idx_mrf_landing_has_rare_keys ON mrf_landing(has_rare_keys) WHERE has_rare_keys = TRUE;
-
--- Index for efficient lookups by file_name and record_type (for analysis)
-CREATE INDEX IF NOT EXISTS idx_mrf_landing_file_record ON mrf_landing(file_name, record_type);

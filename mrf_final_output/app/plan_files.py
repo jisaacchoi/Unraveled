@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 
 from app.api_config import get_config_value
-from app.db_utils import get_file_urls_by_plan
+from app.db_utils import get_file_urls_by_plan, get_file_urls_by_file_name
 from app.utils import ensure_directory
 from src.mrf_downloader import download_file, filename_from_url, session_with_retries
 from src.shared.database import build_connection_string
@@ -21,6 +21,85 @@ def _get_download_dir(config) -> Optional[Path]:
     if not download_dir:
         download_dir = get_config_value(config, "processing.plan_download_directory", None)
     return Path(download_dir) if download_dir else None
+
+
+def download_files_by_name(config, file_name: str) -> List[Path]:
+    """
+    Download files referenced by mrf_index.file_url for a given file name.
+
+    Returns list of downloaded file paths (existing files are included).
+    """
+    enabled = get_config_value(config, "processing.enable_plan_download", True)
+    if not enabled:
+        LOG.info("Plan download disabled by config")
+        return []
+
+    download_dir = _get_download_dir(config)
+    if not download_dir:
+        LOG.info("Plan download directory not configured; skipping download")
+        return []
+
+    file_records = get_file_urls_by_file_name(config, file_name)
+    if not file_records:
+        LOG.warning(
+            "No file_url records found in mrf_index for file_name=%s that are also in mrf_analyzed. "
+            "Only analyzed files will be downloaded.",
+            file_name
+        )
+        return []
+
+    ensure_directory(download_dir)
+
+    chunk_size_bytes = int(get_config_value(config, "processing.plan_download_chunk_size_bytes", 16 * 1024))
+    max_file_size_gb = 20.0
+
+    sess = session_with_retries()
+    downloaded: List[Path] = []
+    for url, filename_from_db in file_records:
+        # Use filename from database if available, otherwise extract from URL
+        filename = filename_from_db if filename_from_db else filename_from_url(url, "plan_file.json.gz")
+        dest = download_dir / filename
+        if dest.exists():
+            LOG.info("File already exists, skipping download: %s", dest)
+            downloaded.append(dest)
+            continue
+        try:
+            download_file(sess, url, dest, chunk_size=chunk_size_bytes, max_file_size_gb=max_file_size_gb)
+            
+            # Ensure .part file is renamed to final file (cleanup if rename failed)
+            part_file = dest.with_suffix(dest.suffix + ".part")
+            if part_file.exists():
+                LOG.warning("Found .part file after download completed, attempting to rename: %s", part_file)
+                import time
+                max_retries = 5
+                retry_delay = 0.2
+                for attempt in range(max_retries):
+                    try:
+                        part_file.replace(dest)
+                        LOG.info("Successfully renamed .part file to final file: %s", dest)
+                        break
+                    except (PermissionError, OSError) as e:
+                        if attempt < max_retries - 1:
+                            LOG.debug("Retry %d/%d: File still in use, waiting %.1f seconds...", 
+                                     attempt + 1, max_retries, retry_delay)
+                            time.sleep(retry_delay)
+                            retry_delay *= 1.5
+                        else:
+                            LOG.error("Failed to rename .part file after %d attempts: %s", max_retries, e)
+                            raise
+            
+            # Verify final file exists and .part file is gone
+            if not dest.exists():
+                raise FileNotFoundError(f"Downloaded file does not exist after download: {dest}")
+            if part_file.exists():
+                raise RuntimeError(f".part file still exists after download: {part_file}")
+            
+            downloaded.append(dest)
+        except Exception as exc:  # noqa: BLE001
+            LOG.error("Failed to download %s: %s", url, exc)
+            continue
+
+    return downloaded
 
 
 def download_plan_files(config, plan_name: str) -> List[Path]:
@@ -39,9 +118,13 @@ def download_plan_files(config, plan_name: str) -> List[Path]:
         LOG.info("Plan download directory not configured; skipping download")
         return []
 
-    file_urls = get_file_urls_by_plan(config, plan_name)
-    if not file_urls:
-        LOG.warning("No file_url records found in mrf_index for plan_name=%s", plan_name)
+    file_records = get_file_urls_by_plan(config, plan_name)
+    if not file_records:
+        LOG.warning(
+            "No file_url records found in mrf_index for plan_name=%s that are also in mrf_analyzed. "
+            "Only analyzed files will be downloaded.",
+            plan_name
+        )
         return []
 
     ensure_directory(download_dir)
@@ -51,8 +134,9 @@ def download_plan_files(config, plan_name: str) -> List[Path]:
 
     sess = session_with_retries()
     downloaded: List[Path] = []
-    for url in file_urls:
-        filename = filename_from_url(url, "plan_file.json.gz")
+    for url, filename_from_db in file_records:
+        # Use filename from database if available, otherwise extract from URL
+        filename = filename_from_db if filename_from_db else filename_from_url(url, "plan_file.json.gz")
         dest = download_dir / filename
         if dest.exists():
             LOG.info("File already exists, skipping download: %s", dest)
@@ -60,6 +144,35 @@ def download_plan_files(config, plan_name: str) -> List[Path]:
             continue
         try:
             download_file(sess, url, dest, chunk_size=chunk_size_bytes, max_file_size_gb=max_file_size_gb)
+            
+            # Ensure .part file is renamed to final file (cleanup if rename failed)
+            part_file = dest.with_suffix(dest.suffix + ".part")
+            if part_file.exists():
+                LOG.warning("Found .part file after download completed, attempting to rename: %s", part_file)
+                import time
+                max_retries = 5
+                retry_delay = 0.2
+                for attempt in range(max_retries):
+                    try:
+                        part_file.replace(dest)
+                        LOG.info("Successfully renamed .part file to final file: %s", dest)
+                        break
+                    except (PermissionError, OSError) as e:
+                        if attempt < max_retries - 1:
+                            LOG.debug("Retry %d/%d: File still in use, waiting %.1f seconds...", 
+                                     attempt + 1, max_retries, retry_delay)
+                            time.sleep(retry_delay)
+                            retry_delay *= 1.5
+                        else:
+                            LOG.error("Failed to rename .part file after %d attempts: %s", max_retries, e)
+                            raise
+            
+            # Verify final file exists and .part file is gone
+            if not dest.exists():
+                raise FileNotFoundError(f"Downloaded file does not exist after download: {dest}")
+            if part_file.exists():
+                raise RuntimeError(f".part file still exists after download: {part_file}")
+            
             downloaded.append(dest)
         except Exception as exc:  # noqa: BLE001
             LOG.error("Failed to download %s: %s", url, exc)
@@ -110,6 +223,9 @@ def split_files_if_needed(
     size_per_file_bytes = int(size_per_file_mb * 1024 * 1024)
     num_array_threads = int(split_cfg.get("num_array_threads", 1))
     log_chunk_progress = bool(split_cfg.get("log_chunk_progress", False))
+    adaptive_chunk_target_items = int(split_cfg.get("adaptive_chunk_target_items", 50))
+    adaptive_chunk_min_size_mb = float(split_cfg.get("adaptive_chunk_min_size_mb", 1))
+    adaptive_chunk_min_size = int(adaptive_chunk_min_size_mb * 1024 * 1024)
 
     min_file_size_mb = float(split_cfg.get("min_file_size_mb_for_indexed_gzip", 0))
     index_path_cfg = split_cfg.get("index_path")
@@ -153,6 +269,8 @@ def split_files_if_needed(
                 file_name=file_path.name,
                 num_array_threads=num_array_threads,
                 log_chunk_progress=log_chunk_progress,
+                adaptive_chunk_target_items=adaptive_chunk_target_items,
+                adaptive_chunk_min_size=adaptive_chunk_min_size,
             )
             if parts_created > 0:
                 try:

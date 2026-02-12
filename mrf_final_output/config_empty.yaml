@@ -65,4 +65,4 @@ pipeline:
     split_chunk_read_bytes: 
     split_size_per_file_mb: 
     num_array_threads: 
-    log_chunk_progress: 
+    log_chunk_progress: false

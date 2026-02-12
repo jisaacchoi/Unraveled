@@ -1,3 +1,4 @@
 cd  ~/Documents/Unraveled; source .venv/Scripts/activate; 
 cd mrf_stage_setter
 python run_pipeline.py --step 
+python -m uvicorn main:app --host 0.0.0.0 --port 8000

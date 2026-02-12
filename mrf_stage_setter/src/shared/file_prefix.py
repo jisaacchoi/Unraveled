@@ -43,7 +43,10 @@ def add_prefix(file_path: Path, prefix: str) -> Path:
     if prefix == PREFIX_ANALYZED and filename.startswith(PREFIX_INGESTED):
         # Check if _analyzed_ already exists after _ingested_ (to avoid double prefix)
         remaining_after_ingested = filename[len(PREFIX_INGESTED):]
-        if remaining_after_ingested.startswith(PREFIX_ANALYZED):
+        if (
+            remaining_after_ingested.startswith(PREFIX_ANALYZED)
+            or remaining_after_ingested.startswith(PREFIX_ANALYZED.lstrip("_"))
+        ):
             # File already has _ingested_analyzed_ prefix, return original
             LOG.debug("File %s already has _ingested_analyzed_ prefix, returning original path", file_path)
             return file_path
