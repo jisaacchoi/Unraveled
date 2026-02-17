@@ -19,6 +19,22 @@ SchemaType = dict | str
 SchemaField = dict
 
 
+def _resolve_value_dtype(existing_dtype: str, incoming_dtype: str) -> str:
+    """
+    Resolve conflicting mrf_analysis value_dtype values for the same path/key.
+
+    Prefer container shapes over scalar, and prefer list when both list/dict
+    are observed so top-level arrays are not downgraded by stale rows.
+    """
+    if existing_dtype == incoming_dtype:
+        return existing_dtype
+
+    priority = {"scalar": 0, "dict": 1, "list": 2}
+    existing_rank = priority.get(existing_dtype, -1)
+    incoming_rank = priority.get(incoming_dtype, -1)
+    return incoming_dtype if incoming_rank > existing_rank else existing_dtype
+
+
 def _make_field(name: str, field_type: SchemaType, nullable: bool = True) -> SchemaField:
     return {
         "name": name,
@@ -487,13 +503,22 @@ def generate_schema_from_mrf_analysis(
         
         for level, path, path_group, key, top_level_key, value_jsonb, value_dtype in rows:
             if level == 0:
-                # Top-level key
+                # Top-level key. Merge duplicates robustly across reruns/stale rows.
                 if key not in top_level_records:
                     top_level_records[key] = {
                         'value_dtype': value_dtype,
                         'value': value_jsonb,
                         'nested': []
                     }
+                else:
+                    resolved_dtype = _resolve_value_dtype(
+                        top_level_records[key]['value_dtype'],
+                        value_dtype,
+                    )
+                    top_level_records[key]['value_dtype'] = resolved_dtype
+                    # Keep a representative value aligned with resolved dtype when possible.
+                    if resolved_dtype == value_dtype:
+                        top_level_records[key]['value'] = value_jsonb
             else:
                 # Nested record - collect all nested records for recursive processing
                 nested_record = {
@@ -557,6 +582,18 @@ def generate_schema_from_mrf_analysis(
                         # Use value directly if available
                         element_type = infer_type_from_value(value[0])
                         field_type = array(element_type)
+                    elif isinstance(value, dict):
+                        # Defensive fallback: stale list dtype can exist when historical
+                        # analysis misclassified duplicated scalar keys as arrays.
+                        # If no element records are present, treat object payload as struct.
+                        LOG.warning(
+                            "Top-level key '%s' marked list but has dict payload and no element records; "
+                            "treating as struct fallback",
+                            key,
+                        )
+                        field_type = struct(
+                            [_make_field(k, infer_type_from_value(v)) for k, v in value.items()]
+                        )
                     else:
                         # Default to array(string)
                         field_type = array(string())

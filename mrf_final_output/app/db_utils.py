@@ -36,6 +36,26 @@ def get_file_name_core_by_plan(config, plan_name: str) -> Optional[str]:
         conn.close()
 
 
+def get_file_name_cores_by_plan(config, plan_name: str) -> List[str]:
+    """
+    Get all distinct file_name_core values for a plan_name.
+    """
+    sql = """
+        SELECT DISTINCT file_name_core
+        FROM vw_mrf_reporting_plans
+        WHERE plan_name = %s
+        ORDER BY file_name_core
+    """
+    conn = _get_db_conn(config)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, (plan_name,))
+            rows = cur.fetchall()
+            return [r[0] for r in rows if r and r[0]]
+    finally:
+        conn.close()
+
+
 def get_file_urls_by_plan(config, plan_name: str) -> List[tuple[str, str]]:
     """
     Get file URLs and filenames for a given plan name.

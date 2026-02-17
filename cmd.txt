@@ -1,4 +1,11 @@
 cd  ~/Documents/Unraveled; source .venv/Scripts/activate; 
+
 cd mrf_stage_setter
 python run_pipeline.py --step 
+
+cd mrf_final_output
 python -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+curl -X POST "http://localhost:8000/api/v1/convert" \
+  -H "Content-Type: application/json" \
+  -d '{"file_name":"2026-01_720_27B0_in-network-rates_37_of_57.json.gz"}'

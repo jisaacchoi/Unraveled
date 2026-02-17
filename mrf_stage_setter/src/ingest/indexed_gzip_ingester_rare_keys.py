@@ -51,6 +51,8 @@ class ScanResult:
     unique_hits: Dict[str, KeyHit]  # Top-level keys that appear once
     key_occurrences: Dict[str, Tuple[int, int]]  # Count and first occurrence: {key: (count, first_offset)}
     array_starts: Dict[str, int]  # Array start offsets: {array_key: start_offset}
+    forced_key_offsets: Dict[str, Tuple[int, int]]  # Forced keys: {key: (first_offset, last_offset)}
+    forced_key_array_starts: Dict[str, Tuple[Optional[int], Optional[int]]]  # Forced keys: {key: (first_array_start, last_array_start)}
 
 
 def _decode_json_string_bytes(b: bytes) -> str:
@@ -119,6 +121,7 @@ def scan_keys_with_occurrences(
     chunk_size: int = 8 * 1024 * 1024,  # 8MB default
     overlap_bytes: int = 2048,  # 2KB default
     progress_every_chunks: int = 5,
+    forced_top_level_arrays: Optional[List[str]] = None,
 ) -> ScanResult:
     """
     Scan for all JSON keys and track all occurrences (not just unique ones).
@@ -162,10 +165,14 @@ def scan_keys_with_occurrences(
         LOG.warning("Could not get uncompressed size from IndexedGzipFile: %s. Using compressed size estimate.", e)
         uncompressed_size = None
     
+    forced_keys = {k for k in (forced_top_level_arrays or []) if isinstance(k, str) and k}
+
     seen_once: Dict[str, int] = {}
     seen_multiple: set[str] = set()
     key_occurrences: Dict[str, Tuple[int, int]] = {}  # Track count and first occurrence: {key: (count, first_offset)}
     array_starts: Dict[str, int] = {}  # Track array start offsets
+    forced_key_offsets: Dict[str, Tuple[int, int]] = {}
+    forced_key_array_starts: Dict[str, Tuple[Optional[int], Optional[int]]] = {}
     
     tail = b""
     abs_read = 0
@@ -205,6 +212,34 @@ def scan_keys_with_occurrences(
                 else:
                     count, first_offset = existing
                     key_occurrences[key] = (count + 1, first_offset)  # Increment count, keep first_offset
+
+                # Detect if this key's value starts with an array marker.
+                key_end = m.end()
+                value_start = key_end
+                while value_start < len(combined) and combined[value_start] in b" \t\r\n:":
+                    value_start += 1
+                current_array_start_offset: Optional[int] = None
+                if value_start < len(combined) and combined[value_start] == ord(b'['):
+                    current_array_start_offset = abs_offset + (value_start - m.start())
+
+                # Track first/last offsets for forced keys even when they are non-unique.
+                if key in forced_keys:
+                    forced_existing = forced_key_offsets.get(key)
+                    if forced_existing is None:
+                        forced_key_offsets[key] = (abs_offset, abs_offset)
+                    else:
+                        forced_key_offsets[key] = (forced_existing[0], abs_offset)
+
+                    arr_existing = forced_key_array_starts.get(key)
+                    if arr_existing is None:
+                        forced_key_array_starts[key] = (current_array_start_offset, current_array_start_offset)
+                    else:
+                        first_arr_start, last_arr_start = arr_existing
+                        if first_arr_start is None and current_array_start_offset is not None:
+                            first_arr_start = current_array_start_offset
+                        if current_array_start_offset is not None:
+                            last_arr_start = current_array_start_offset
+                        forced_key_array_starts[key] = (first_arr_start, last_arr_start)
                 
                 # Track unique vs multiple (for top-level detection)
                 # Check seen_multiple first to short-circuit early (most keys will be here)
@@ -222,17 +257,9 @@ def scan_keys_with_occurrences(
                 # First occurrence - add to seen_once
                 seen_once[key] = abs_offset
                 
-                # Detect if this key's value is an array (only for unique keys)
-                # Look ahead to see if value starts with '['
-                key_end = m.end()
-                value_start = key_end
-                # Skip whitespace and colon
-                while value_start < len(combined) and combined[value_start] in b" \t\r\n:":
-                    value_start += 1
-                
-                if value_start < len(combined) and combined[value_start] == ord(b'['):
-                    # This is an array - track its start offset
-                    array_starts[key] = abs_offset + (value_start - m.start())
+                # Track array starts discovered for unique keys.
+                if current_array_start_offset is not None:
+                    array_starts[key] = current_array_start_offset
             
             tail = combined[-overlap_bytes:] if overlap_bytes > 0 else b""
             chunk_index += 1
@@ -288,6 +315,26 @@ def scan_keys_with_occurrences(
             )
             for k, o in seen_once.items()
         }
+
+        # Force configured keys as top-level targets using their first offset,
+        # even if they are not unique in the full document.
+        for forced_key, (first_offset, last_offset) in forced_key_offsets.items():
+            if forced_key not in unique_hits:
+                unique_hits[forced_key] = KeyHit(
+                    key=forced_key,
+                    abs_offset=first_offset,
+                    chunk_index=first_offset // chunk_size,
+                    offset_in_chunk=first_offset % chunk_size,
+                )
+            forced_first_arr_start, _ = forced_key_array_starts.get(forced_key, (None, None))
+            if forced_first_arr_start is not None:
+                array_starts[forced_key] = forced_first_arr_start
+            LOG.info(
+                "Forced key tracked: '%s' first_offset=%d, last_offset=%d",
+                forced_key,
+                first_offset,
+                last_offset,
+            )
         
         LOG.info("Found %d unique (top-level) key(s)", len(unique_hits))
         total_occurrences = sum(count for count, _ in key_occurrences.values())
@@ -298,6 +345,8 @@ def scan_keys_with_occurrences(
             unique_hits=unique_hits,
             key_occurrences=key_occurrences,
             array_starts=array_starts,
+            forced_key_offsets=forced_key_offsets,
+            forced_key_array_starts=forced_key_array_starts,
         )
     
     finally:
@@ -1529,6 +1578,7 @@ def ingest_file_indexed_gzip_rare_keys(
     num_key_threads: int = 1,
     progress_every_chunks: int = 5,
     num_rare_keys: int = 10,
+    forced_top_level_arrays: Optional[List[str]] = None,
 ) -> int:
     """
     Ingest a large .json.gz file using indexed_gzip with rare key detection and extraction.
@@ -1641,6 +1691,7 @@ def ingest_file_indexed_gzip_rare_keys(
             chunk_size=chunk_size,
             overlap_bytes=overlap_bytes,
             progress_every_chunks=progress_every_chunks,
+            forced_top_level_arrays=forced_top_level_arrays,
         )
         scan_time += time.perf_counter() - t0
         
@@ -1680,43 +1731,45 @@ def ingest_file_indexed_gzip_rare_keys(
         else:
             LOG.info("Using standard json library (install 'orjson' for 3-5x faster serialization)")
         
-        targets = list(scan_result.unique_hits.items())
+        # Build extraction targets:
+        # - default: one target per unique top-level key
+        # - forced keys: add both first and last offsets (if they differ)
+        target_rows: List[Tuple[str, int]] = [
+            (key_name, hit.abs_offset)
+            for key_name, hit in scan_result.unique_hits.items()
+        ]
+
+        for forced_key in (forced_top_level_arrays or []):
+            forced_offsets = scan_result.forced_key_offsets.get(forced_key)
+            if not forced_offsets:
+                continue
+            first_offset, last_offset = forced_offsets
+            target_rows.append((forced_key, first_offset))
+            if last_offset != first_offset:
+                target_rows.append((forced_key, last_offset))
+
+        # De-duplicate and sort by offset so span boundaries remain well-ordered.
+        seen_target_pairs: set[Tuple[str, int]] = set()
+        deduped_targets: List[Tuple[str, int]] = []
+        for key_name, key_offset in sorted(target_rows, key=lambda t: t[1]):
+            pair = (key_name, key_offset)
+            if pair in seen_target_pairs:
+                continue
+            seen_target_pairs.add(pair)
+            deduped_targets.append(pair)
+
+        targets = deduped_targets
+        LOG.info("Prepared %d extraction target(s) after forced key expansion", len(targets))
         
-        # Thread-safe batch writing and record counting
+        # Thread-safe dedupe buffer and record counting
         batch_lock = threading.Lock()
-        pending_batch = io.StringIO()
-        pending_batch_rows = 0
+        # record_type -> (payload_size, raw_copy_line)
+        best_rows_by_record_type: Dict[str, Tuple[int, str]] = {}
         record_count = 0
         record_count_lock = threading.Lock()
 
-        def _flush_pending_batch_locked() -> None:
-            """Flush accumulated rows to database. Caller must hold batch_lock."""
-            nonlocal copy_time, pending_batch_rows
-            if pending_batch_rows == 0:
-                return
-
-            pending_batch.seek(0)
-            try:
-                copy_start = time.perf_counter()
-                cursor.copy_expert(
-                    """
-                    COPY mrf_landing(source_name, file_name, file_size, record_type, record_index, payload, payload_size, array_start_offset, has_rare_keys)
-                    FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', QUOTE '"', NULL '\\N')
-                    """,
-                    pending_batch,
-                )
-                copy_time += time.perf_counter() - copy_start
-            except Exception as exc:  # noqa: BLE001
-                LOG.exception("Error flushing batched rows to database: %s", exc)
-                raise
-            finally:
-                pending_batch.seek(0)
-                pending_batch.truncate(0)
-                pending_batch_rows = 0
-        
         def write_batch_to_db(batch_data: io.StringIO) -> None:
-            """Thread-safe function to append rows and flush to DB when batch threshold is reached."""
-            nonlocal pending_batch_rows
+            """Thread-safe function to dedupe rows by record_type using max payload_size."""
             batch_data.seek(0)
             content = batch_data.getvalue()
             if not content or len(content.strip()) == 0:
@@ -1724,11 +1777,31 @@ def ingest_file_indexed_gzip_rare_keys(
             
             with batch_lock:
                 try:
-                    pending_batch.write(content)
-                    pending_batch_rows += content.count("\n")
+                    for raw_line in content.splitlines():
+                        if not raw_line.strip():
+                            continue
+                        parsed_rows = list(
+                            csv.reader(
+                                [raw_line],
+                                delimiter="\t",
+                                quotechar='"',
+                                doublequote=True,
+                            )
+                        )
+                        if not parsed_rows:
+                            continue
+                        parsed = parsed_rows[0]
+                        if len(parsed) < 7:
+                            continue
+                        record_type = parsed[3]
+                        try:
+                            payload_size = int(parsed[6])
+                        except Exception:  # noqa: BLE001
+                            payload_size = -1
 
-                    if pending_batch_rows >= max(1, batch_size):
-                        _flush_pending_batch_locked()
+                        existing = best_rows_by_record_type.get(record_type)
+                        if existing is None or payload_size > existing[0]:
+                            best_rows_by_record_type[record_type] = (payload_size, raw_line)
                 except Exception as exc:  # noqa: BLE001
                     LOG.exception("Error writing batch to database: %s", exc)
                     raise
@@ -1762,9 +1835,8 @@ def ingest_file_indexed_gzip_rare_keys(
         
         if num_key_threads == 1:
             process_start = time.perf_counter()
-            for i, (key_name, hit) in enumerate(targets):
-                start = hit.abs_offset
-                next_key_offset = targets[i + 1][1].abs_offset if i + 1 < len(targets) else None
+            for i, (key_name, start) in enumerate(targets):
+                next_key_offset = targets[i + 1][1] if i + 1 < len(targets) else None
                 
                 process_single_key_with_rare_keys(
                     key_name=key_name,
@@ -1797,8 +1869,8 @@ def ingest_file_indexed_gzip_rare_keys(
                     executor.submit(
                         process_single_key_with_rare_keys,
                         key_name=key_name,
-                        key_offset=hit.abs_offset,
-                        next_key_offset=targets[i + 1][1].abs_offset if i + 1 < len(targets) else None,
+                        key_offset=key_offset,
+                        next_key_offset=targets[i + 1][1] if i + 1 < len(targets) else None,
                         input_path=file_path,
                         index_path=index_path,
                         source_name=source_name,
@@ -1813,7 +1885,7 @@ def ingest_file_indexed_gzip_rare_keys(
                         get_record_count=get_record_count,
                         increment_record_count=increment_record_count,
                     ): key_name
-                    for i, (key_name, hit) in enumerate(targets)
+                    for i, (key_name, key_offset) in enumerate(targets)
                 }
                 
                 for future in as_completed(future_to_key):
@@ -1828,9 +1900,28 @@ def ingest_file_indexed_gzip_rare_keys(
                         LOG.error("Key '%s' failed with exception: %s", key_name, exc, exc_info=True)
             process_time += time.perf_counter() - process_start
 
-        # Flush any buffered rows that did not reach batch_size.
+        # Finalize deduped rows and write once to mrf_landing.
         with batch_lock:
-            _flush_pending_batch_locked()
+            deduped_lines = [raw_line for _, raw_line in best_rows_by_record_type.values()]
+
+        if deduped_lines:
+            final_buffer = io.StringIO("\n".join(deduped_lines) + "\n")
+            try:
+                copy_start = time.perf_counter()
+                cursor.copy_expert(
+                    """
+                    COPY mrf_landing(source_name, file_name, file_size, record_type, record_index, payload, payload_size, array_start_offset, has_rare_keys)
+                    FROM STDIN WITH (FORMAT CSV, DELIMITER E'\\t', QUOTE '"', NULL '\\N')
+                    """,
+                    final_buffer,
+                )
+                copy_time += time.perf_counter() - copy_start
+            except Exception as exc:  # noqa: BLE001
+                LOG.exception("Error writing deduped rows to database: %s", exc)
+                raise
+
+        with record_count_lock:
+            record_count = len(best_rows_by_record_type)
         
         if show_progress:
             pbar.close()

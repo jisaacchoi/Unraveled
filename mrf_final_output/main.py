@@ -2,6 +2,8 @@
 import asyncio
 import logging
 import os
+import signal
+import threading
 import time
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
@@ -28,7 +30,7 @@ from app.file_finder import (
 )
 from app.processor import process_single_file
 from app.utils import parse_filter_string, generate_run_id, ensure_directory
-from app.db_utils import get_file_name_core_by_plan, get_npis_by_zip
+from app.db_utils import get_file_name_core_by_plan, get_file_name_cores_by_plan, get_npis_by_zip
 from app.plan_files import download_plan_files, download_files_by_name, split_files_if_needed
 from app.schema_grouping import group_schema_directories_in_paths, move_schema_files_to_directory
 
@@ -114,6 +116,34 @@ app = FastAPI(
 
 # Global Spark session (initialized on startup)
 spark: Optional[SparkSession] = None
+_active_job_ids: set[str] = set()
+_active_job_ids_lock = threading.Lock()
+_signal_handlers_registered = False
+
+
+def _register_signal_handlers() -> None:
+    """Register process signal handlers once for lifecycle diagnostics."""
+    global _signal_handlers_registered
+    if _signal_handlers_registered:
+        return
+
+    def _handle_signal(signum, frame):  # noqa: ARG001
+        signal_name = signal.Signals(signum).name if signum in signal.Signals._value2member_map_ else str(signum)
+        with _active_job_ids_lock:
+            active_jobs = sorted(_active_job_ids)
+        LOG.warning(
+            "Process signal received signal=%s pid=%s active_jobs=%s",
+            signal_name,
+            os.getpid(),
+            active_jobs,
+        )
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, _handle_signal)
+        except Exception as e:  # noqa: BLE001
+            LOG.warning("Could not register signal handler for %s: %s", sig, e)
+    _signal_handlers_registered = True
 
 
 @app.middleware("http")
@@ -167,16 +197,24 @@ def get_spark_session() -> SparkSession:
 async def startup_event():
     """Initialize Spark session on startup."""
     try:
+        _register_signal_handlers()
         enable_parquet_conversion = get_config_value(
             config, "processing.enable_parquet_conversion", True
         )
         if enable_parquet_conversion:
             get_spark_session()
-            LOG.info("API service started")
+            LOG.info(
+                "API service started pid=%s ppid=%s parquet_enabled=true",
+                os.getpid(),
+                os.getppid(),
+            )
         else:
             LOG.info(
-                "API service started with enable_parquet_conversion=false; "
+                "API service started pid=%s ppid=%s with enable_parquet_conversion=false; "
                 "Spark initialization skipped."
+                ,
+                os.getpid(),
+                os.getppid(),
             )
     except Exception as e:
         LOG.error(f"Failed to initialize Spark: {e}")
@@ -186,9 +224,22 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown."""
     global spark
+    with _active_job_ids_lock:
+        active_jobs = sorted(_active_job_ids)
+    LOG.warning(
+        "Shutdown event received pid=%s active_jobs=%s spark_initialized=%s",
+        os.getpid(),
+        active_jobs,
+        spark is not None,
+    )
     if spark is not None:
+        spark_app_id = None
+        try:
+            spark_app_id = spark.sparkContext.applicationId
+        except Exception:  # noqa: BLE001
+            pass
         spark.stop()
-        LOG.info("Spark session stopped")
+        LOG.info("Spark session stopped app_id=%s", spark_app_id)
 
 
 def process_job(
@@ -196,10 +247,28 @@ def process_job(
     plan_name: Optional[str],
     file_name: Optional[str],
     cpt_code: Optional[str],
+    npi: Optional[str],
     zipcode: Optional[str],
 ):
     """Background task to process a conversion job."""
+    start_monotonic = time.perf_counter()
+    with _active_job_ids_lock:
+        _active_job_ids.add(job_id)
+    LOG.info(
+        "Job %s started pid=%s thread=%s plan_name=%s file_name=%s",
+        job_id,
+        os.getpid(),
+        threading.current_thread().name,
+        plan_name,
+        file_name,
+    )
+
+    def log_stage(stage: str) -> None:
+        elapsed_s = time.perf_counter() - start_monotonic
+        LOG.info("Job %s stage=%s elapsed_s=%.2f", job_id, stage, elapsed_s)
+
     try:
+        log_stage("start")
         job_manager.update_job_status(
             job_id, JobStatus.PROCESSING, progress=10, message="Starting processing"
         )
@@ -218,6 +287,7 @@ def process_job(
         skip_url_download = processing_config.get("skip_url_download", True)
         output_format = processing_config.get("output_format", "parquet")
         enable_parquet_conversion = processing_config.get("enable_parquet_conversion", True)
+        spark_environment = get_config_value(config, "spark.environment", "local")
 
         if provider_download_dir:
             provider_download_dir = Path(provider_download_dir)
@@ -247,7 +317,6 @@ def process_job(
                 # We need to wait for .part files to disappear before proceeding
                 if downloaded_files:
                     LOG.info(f"Downloaded {len(downloaded_files)} file(s). Verifying downloads are complete...")
-                    import time
                     max_wait_time = 300  # Maximum 5 minutes to wait for downloads
                     check_interval = 0.5  # Check every 0.5 seconds
                     
@@ -283,8 +352,10 @@ def process_job(
         job_manager.update_job_status(
             job_id, JobStatus.PROCESSING, progress=20, message="Finding source file"
         )
+        log_stage("finding_source_file")
         
-        # Resolve file_name_core: either from direct file_name or by resolving plan_name
+        # Resolve file_name_core(s): direct file_name => one core, plan_name => all cores
+        file_name_cores = []
         if file_name:
             # Use file_name directly (strip extension if present for matching)
             file_name_core = file_name
@@ -292,15 +363,29 @@ def process_job(
                 file_name_core = file_name_core[:-8]  # Remove .json.gz
             elif file_name_core.endswith('.json'):
                 file_name_core = file_name_core[:-5]  # Remove .json
+            file_name_cores = [file_name_core]
             LOG.info(f"Using direct file_name: {file_name} (file_name_core: {file_name_core})")
         elif plan_name:
-            # Resolve plan_name to file_name_core
-            file_name_core = get_file_name_core_by_plan(config, plan_name)
-            if not file_name_core:
+            # Resolve plan_name to all file_name_core values.
+            file_name_cores = get_file_name_cores_by_plan(config, plan_name)
+            if not file_name_cores:
+                # Backward-compatible fallback for environments where the view may only surface one row.
+                fallback_core = get_file_name_core_by_plan(config, plan_name)
+                if fallback_core:
+                    file_name_cores = [fallback_core]
+            if not file_name_cores:
                 raise FileNotFoundError(f"Could not find file_name_core for plan_name: {plan_name}")
-            LOG.info(f"Resolved plan_name '{plan_name}' to file_name_core: {file_name_core}")
+            if len(file_name_cores) == 1:
+                LOG.info(f"Resolved plan_name '{plan_name}' to file_name_core: {file_name_cores[0]}")
+            else:
+                LOG.info(
+                    "Resolved plan_name '%s' to %d file_name_core value(s)",
+                    plan_name,
+                    len(file_name_cores),
+                )
         else:
             raise ValueError("Either plan_name or file_name must be provided")
+        file_name_core = file_name_cores[0]
 
         # Build search paths from structure.json locations and input directory
         structure_roots = get_config_value(config, "paths.structure_json_directories", []) or []
@@ -343,21 +428,41 @@ def process_job(
             if plan_download_dir:
                 search_paths.append(plan_download_dir)
 
-        # Find source file(s) and schema based on file_name_core
-        all_file_parts = find_all_file_parts_in_paths(search_paths, file_name_core)
-        group_dirs = find_group_dirs_with_files(search_paths, file_name_core)
+        # Find source file(s) and schema across all resolved file_name_core values.
+        all_file_parts = []
+        group_dirs_set = set()
+        for core in file_name_cores:
+            core_parts = find_all_file_parts_in_paths(search_paths, core)
+            core_groups = find_group_dirs_with_files(search_paths, core)
+            all_file_parts.extend(core_parts)
+            group_dirs_set.update(core_groups)
+        all_file_parts = sorted(set(all_file_parts))
+        group_dirs = sorted(group_dirs_set)
         if not group_dirs:
             raise FileNotFoundError(
-                f"Source file not found: {file_name_core} in any search path"
+                f"Source file(s) not found for plan/file selection in any search path"
             )
         source_group = ",".join([d.name for d in group_dirs])
-        
-        LOG.info(f"Found file(s) in {source_group}: {file_name_core}")
-        LOG.info(f"Found {len(all_file_parts)} file part(s)")
+
+        LOG.info(
+            "Found file(s) in group(s) [%s] for %d core(s)",
+            source_group,
+            len(file_name_cores),
+        )
+        LOG.info(f"Found {len(all_file_parts)} file part(s) across all groups")
+        for group_dir in group_dirs:
+            group_files = sorted([p for p in all_file_parts if p.parent == group_dir])
+            LOG.info(
+                "[group=%s] discovered %d file part(s): %s",
+                group_dir.name,
+                len(group_files),
+                [p.name for p in group_files],
+            )
         
         job_manager.update_job_status(
             job_id, JobStatus.PROCESSING, progress=30, message="Preparing output directory"
         )
+        log_stage("preparing_output_directory")
         
         # Create output directory
         run_id = generate_run_id()
@@ -365,9 +470,26 @@ def process_job(
         ensure_directory(output_dir)
         
         # Split large files if configured (downloads are already verified complete above)
+        LOG.info("Splitting check across %d group(s): %s", len(group_dirs), [d.name for d in group_dirs])
         split_files_if_needed(config, all_file_parts, [Path(p) for p in structure_roots])
-        all_file_parts = find_all_file_parts_in_paths(search_paths, file_name_core)
-        group_dirs = find_group_dirs_with_files(search_paths, file_name_core)
+        all_file_parts = []
+        group_dirs_set = set()
+        for core in file_name_cores:
+            core_parts = find_all_file_parts_in_paths(search_paths, core)
+            core_groups = find_group_dirs_with_files(search_paths, core)
+            all_file_parts.extend(core_parts)
+            group_dirs_set.update(core_groups)
+        all_file_parts = sorted(set(all_file_parts))
+        group_dirs = sorted(group_dirs_set)
+        LOG.info("Post-split group discovery: %d group(s): %s", len(group_dirs), [d.name for d in group_dirs])
+        for group_dir in group_dirs:
+            group_files = sorted([p for p in all_file_parts if p.parent == group_dir])
+            LOG.info(
+                "[group=%s] post-split file part(s): %d -> %s",
+                group_dir.name,
+                len(group_files),
+                [p.name for p in group_files],
+            )
 
         # Fast path: if parquet conversion is disabled, skip Spark processing entirely.
         if not enable_parquet_conversion:
@@ -391,6 +513,7 @@ def process_job(
                 "plan_name": plan_name,
                 "file_name": file_name,
                 "file_name_core": file_name_core,
+                "file_name_cores": file_name_cores,
                 "source_group": source_group,
                 "schema_path": used_schema_paths[0] if used_schema_paths else None,
                 "schema_paths": used_schema_paths,
@@ -432,21 +555,40 @@ def process_job(
         job_manager.update_job_status(
             job_id, JobStatus.PROCESSING, progress=40, message="Processing file with Spark"
         )
+        log_stage("spark_processing_begin")
         
         # Parse filters
         billing_code_list = parse_filter_string(cpt_code)
+        direct_npi_list = parse_filter_string(npi)
 
-        # Resolve zipcode to NPI list (optional)
-        npi_list = get_npis_by_zip(config, zipcode) if zipcode else []
+        # Resolve NPIs:
+        # - If direct NPI filter is provided, use it as-is (no zipcode lookup)
+        # - Otherwise, optionally resolve zipcode to NPI list
+        if direct_npi_list:
+            npi_list = direct_npi_list
+            LOG.info("Using direct NPI filter: %d NPIs", len(npi_list))
+        else:
+            npi_list = get_npis_by_zip(config, zipcode) if zipcode else []
         
         # Process file(s) by schema group; append results sequentially
+        log_stage("spark_session_acquire_begin")
         spark = get_spark_session()
+        try:
+            LOG.info(
+                "Job %s spark session ready app_id=%s",
+                job_id,
+                spark.sparkContext.applicationId,
+            )
+        except Exception as e:  # noqa: BLE001
+            LOG.warning("Job %s could not read Spark applicationId: %s", job_id, e)
+        log_stage("spark_session_acquire_done")
         total_rows = 0
         files_written = 0
         used_schema_paths = []
         for idx, group_dir in enumerate(group_dirs, 1):
             group_files = [p for p in all_file_parts if p.parent == group_dir]
             if not group_files:
+                LOG.warning("[group=%s] no matching file parts, skipping group", group_dir.name)
                 continue
 
             schema_path = group_dir / "main_schema.json"
@@ -456,14 +598,27 @@ def process_job(
                 if not candidates:
                     raise FileNotFoundError(f"Schema file not found in {group_dir}")
                 schema_path = candidates[0]
+            if schema_path.parent != group_dir:
+                raise RuntimeError(
+                    f"Schema/group mismatch: schema={schema_path} group={group_dir}"
+                )
             used_schema_paths.append(str(schema_path))
 
-            LOG.info(f"Processing group {idx}/{len(group_dirs)}: {group_dir.name} with {len(group_files)} file(s)")
+            LOG.info(
+                "Processing group %d/%d [group=%s] with %d file(s) and schema=%s",
+                idx,
+                len(group_dirs),
+                group_dir.name,
+                len(group_files),
+                schema_path.name,
+            )
+            group_start = time.perf_counter()
             result = process_single_file(
                 spark=spark,
                 file_paths=group_files,
                 schema_path=schema_path,
                 output_dir=output_dir,
+                group_context=group_dir.name,
                 npi_filter=npi_list,
                 billing_code_filter=billing_code_list,
                 explode_service_codes=explode_service_codes,
@@ -474,6 +629,15 @@ def process_job(
                 output_format=output_format,
                 append_output=(idx > 1),
                 enable_parquet_conversion=enable_parquet_conversion,
+                spark_environment=spark_environment,
+            )
+            LOG.info(
+                "Job %s group=%s finished elapsed_s=%.2f rows=%s files_written=%s",
+                job_id,
+                group_dir.name,
+                time.perf_counter() - group_start,
+                result.get("total_rows", "unknown"),
+                result.get("files_written", "unknown"),
             )
             total_rows += result.get("total_rows", 0)
             files_written += result.get("files_written", 0)
@@ -481,12 +645,14 @@ def process_job(
         job_manager.update_job_status(
             job_id, JobStatus.PROCESSING, progress=90, message="Creating manifest"
         )
+        log_stage("creating_manifest")
         
         # Create manifest.json
         manifest = {
             "plan_name": plan_name,
             "file_name": file_name,
             "file_name_core": file_name_core,
+            "file_name_cores": file_name_cores,
             "source_group": source_group,
             "schema_path": used_schema_paths[0] if used_schema_paths else None,
             "schema_paths": used_schema_paths,
@@ -521,6 +687,7 @@ def process_job(
         )
         
         LOG.info(f"Job {job_id} completed successfully")
+        log_stage("completed")
         
     except FileNotFoundError as e:
         error_msg = str(e)
@@ -542,6 +709,11 @@ def process_job(
             message="Processing failed",
             error=error_msg,
         )
+    finally:
+        elapsed_s = time.perf_counter() - start_monotonic
+        with _active_job_ids_lock:
+            _active_job_ids.discard(job_id)
+        LOG.info("Job %s exit elapsed_s=%.2f", job_id, elapsed_s)
 
 
 @app.post("/api/v1/convert", response_model=ConvertResponse, status_code=202)
@@ -568,6 +740,7 @@ async def convert_file(request: ConvertRequest, background_tasks: BackgroundTask
         plan_name=request.plan_name,
         file_name=request.file_name,
         cpt_code=request.cpt_code,
+        npi=request.npi,
         zipcode=request.zipcode,
     )
     

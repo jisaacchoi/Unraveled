@@ -1,0 +1,43 @@
+[
+  {
+    "group": "group_e2a4f730934b",
+    "status": "ok",
+    "inferred_field_count": 23,
+    "main_field_count": 20,
+    "only_in_inferred_count": 7,
+    "only_in_main_count": 4,
+    "type_mismatch_count": 3,
+    "only_in_inferred_sample": [
+      "last_updated_on",
+      "provider_references",
+      "provider_references[].location",
+      "provider_references[].provider_group_id",
+      "reporting_entity_name",
+      "reporting_entity_type",
+      "version"
+    ],
+    "only_in_main_sample": [
+      "last_updated_on.value",
+      "reporting_entity_name.value",
+      "reporting_entity_type.value",
+      "version.value"
+    ],
+    "type_mismatch_sample": [
+      {
+        "field": "in_network",
+        "inferred": "array<struct<billing_code:string,billing_code_type:string,billing_code_type_version:string,description:string,name:string,negotiated_rates:array<struct<negotiated_prices:array<struct<billing_class:string,billing_code_modifier:array<string>,expiration_date:string,negotiated_rate:double,negotiated_type:string,service_code:array<string>>>,provider_references:array<double>>>,negotiation_arrangement:string>>",
+        "main": "array<struct<billing_code:string,billing_code_type:string,billing_code_type_version:string,description:string,name:string,negotiated_rates:array<struct<negotiated_prices:array<struct<billing_class:string,billing_code_modifier:array<string>,expiration_date:string,negotiated_rate:double,negotiated_type:string,service_code:array<string>>>,provider_references:array<string>>>,negotiation_arrangement:string>>"
+      },
+      {
+        "field": "in_network[].negotiated_rates",
+        "inferred": "array<struct<negotiated_prices:array<struct<billing_class:string,billing_code_modifier:array<string>,expiration_date:string,negotiated_rate:double,negotiated_type:string,service_code:array<string>>>,provider_references:array<double>>>",
+        "main": "array<struct<negotiated_prices:array<struct<billing_class:string,billing_code_modifier:array<string>,expiration_date:string,negotiated_rate:double,negotiated_type:string,service_code:array<string>>>,provider_references:array<string>>>"
+      },
+      {
+        "field": "in_network[].negotiated_rates[].provider_references",
+        "inferred": "array<double>",
+        "main": "array<string>"
+      }
+    ]
+  }
+]

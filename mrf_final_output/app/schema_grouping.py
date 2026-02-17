@@ -44,6 +44,39 @@ def _should_skip_item_for_grouping(item: Path) -> bool:
     return False
 
 
+def _is_in_group_dir(base_dir: Path, path: Path) -> bool:
+    try:
+        rel = path.relative_to(base_dir)
+    except ValueError:
+        return False
+    return any(part.startswith("group_") for part in rel.parts)
+
+
+def _file_core(name: str) -> str:
+    lower = name.lower()
+    if lower.endswith(".json.gz"):
+        return name[:-8]
+    if lower.endswith(".json"):
+        return name[:-5]
+    return Path(name).stem
+
+
+def _schema_data_core(schema_name: str) -> str | None:
+    lower = schema_name.lower()
+    if lower.endswith("_schema.json"):
+        base = schema_name[: -len("_schema.json")]
+    elif lower.endswith(".schema.json"):
+        base = schema_name[: -len(".schema.json")]
+    else:
+        return None
+    return _file_core(base)
+
+
+def _matches_data_core(file_name: str, data_core: str) -> bool:
+    core = _file_core(file_name)
+    return core == data_core or core.startswith(f"{data_core}_part")
+
+
 def group_schema_directories(base_dir: Path) -> List[Path]:
     """
     Group directories by schema.json content under base_dir.
@@ -56,64 +89,95 @@ def group_schema_directories(base_dir: Path) -> List[Path]:
     if not base_dir.exists() or not base_dir.is_dir():
         return []
 
-    schema_files = list(base_dir.rglob("*schema.json"))
+    schema_files = [
+        p for p in base_dir.rglob("*schema.json")
+        if p.is_file() and not _is_in_group_dir(base_dir, p)
+    ]
     if not schema_files:
         return []
 
-    group_dirs: List[Path] = []
+    # Build schema candidates by data core and hash.
+    core_to_schema_entries: dict[str, List[tuple[Path, str]]] = {}
     for schema_path in schema_files:
-        try:
-            schema_dir = schema_path.parent
-            schema_hash = _schema_hash(schema_path)
-            group_dir = base_dir / f"group_{schema_hash[:12]}"
-            group_dir.mkdir(parents=True, exist_ok=True)
-
-            # Skip if already grouped
-            if schema_dir == group_dir:
-                group_dirs.append(group_dir)
-                continue
-
-            # Move all items (including subfolders) into group directory
-            for item in list(schema_dir.iterdir()):
-                if item == group_dir:
-                    continue
-                if _should_skip_item_for_grouping(item):
-                    continue
-                dest = _unique_destination(group_dir / item.name)
-                shutil.move(str(item), str(dest))
-
-            # Remove empty schema_dir if possible
-            if schema_dir != base_dir:
-                try:
-                    schema_dir.rmdir()
-                except OSError:
-                    pass
-
-            # Ensure only one schema file named main_schema.json in group_dir
-            schema_candidates = sorted(group_dir.glob("*schema.json"))
-            if schema_candidates:
-                main_schema = group_dir / "main_schema.json"
-                # Keep the first schema file, rename to main_schema.json
-                keep = schema_candidates[0]
-                if keep != main_schema:
-                    try:
-                        if main_schema.exists():
-                            main_schema.unlink()
-                        keep.rename(main_schema)
-                    except Exception:  # noqa: BLE001
-                        pass
-                # Remove all other schema files
-                for extra in schema_candidates[1:]:
-                    try:
-                        if extra.exists() and extra != main_schema:
-                            extra.unlink()
-                    except Exception:  # noqa: BLE001
-                        pass
-
-            group_dirs.append(group_dir)
-        except Exception as exc:  # noqa: BLE001
-            LOG.warning("Failed to group schema at %s: %s", schema_path, exc)
+        data_core = _schema_data_core(schema_path.name)
+        if not data_core:
+            LOG.warning("Skipping schema with unsupported naming: %s", schema_path.name)
             continue
+        try:
+            schema_hash = _schema_hash(schema_path)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("Failed to hash schema %s: %s", schema_path, exc)
+            continue
+        core_to_schema_entries.setdefault(data_core, []).append((schema_path, schema_hash))
+
+    # Collect ungrouped data files.
+    ungrouped_data_files: List[Path] = []
+    for file_path in base_dir.rglob("*"):
+        if not file_path.is_file():
+            continue
+        if _is_in_group_dir(base_dir, file_path):
+            continue
+        if file_path.name.lower().endswith(".schema.json") or file_path.name.lower().endswith("_schema.json"):
+            continue
+        if file_path.suffix.lower() not in {".gz", ".json"}:
+            continue
+        ungrouped_data_files.append(file_path)
+
+    group_dirs: List[Path] = []
+    for data_core, entries in core_to_schema_entries.items():
+        # Enforce one unique schema hash per data core.
+        hashes = {h for _, h in entries}
+        if len(hashes) > 1:
+            LOG.warning(
+                "Schema conflict for '%s': %d different schema hashes. Skipping grouping for this core.",
+                data_core,
+                len(hashes),
+            )
+            continue
+
+        schema_hash = entries[0][1]
+        group_dir = base_dir / f"group_{schema_hash[:12]}"
+        group_dir.mkdir(parents=True, exist_ok=True)
+
+        # Move data files that belong to this data core.
+        matching_data_files = [p for p in ungrouped_data_files if _matches_data_core(p.name, data_core)]
+        for file_path in matching_data_files:
+            try:
+                dest = _unique_destination(group_dir / file_path.name)
+                shutil.move(str(file_path), str(dest))
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("Failed to move data file %s: %s", file_path, exc)
+
+        # Move schema files for this data core.
+        for schema_path, _ in entries:
+            if not schema_path.exists():
+                continue
+            try:
+                dest = _unique_destination(group_dir / schema_path.name)
+                shutil.move(str(schema_path), str(dest))
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("Failed to move schema file %s: %s", schema_path, exc)
+
+        # Ensure one canonical main schema per group.
+        schema_candidates = sorted(group_dir.glob("*schema.json"))
+        if schema_candidates:
+            main_schema = group_dir / "main_schema.json"
+            keep = schema_candidates[0]
+            if keep != main_schema:
+                try:
+                    if main_schema.exists():
+                        main_schema.unlink()
+                    keep.rename(main_schema)
+                except Exception as exc:  # noqa: BLE001
+                    LOG.warning("Failed to set main schema in %s: %s", group_dir, exc)
+            for extra in schema_candidates[1:]:
+                try:
+                    if extra.exists() and extra != main_schema:
+                        extra.unlink()
+                except Exception as exc:  # noqa: BLE001
+                    LOG.warning("Failed to remove extra schema %s: %s", extra, exc)
+
+        group_dirs.append(group_dir)
 
     return sorted(set(group_dirs))
 

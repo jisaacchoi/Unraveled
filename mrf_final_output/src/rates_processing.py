@@ -17,26 +17,30 @@ def process_in_network_rates(
     raw: DataFrame,
     has_in_network: bool,
     explode_service_codes: bool = False,
+    array_column: str = "in_network",
+    preserve_null_arrays: bool = True,
 ) -> Optional[DataFrame]:
     """
     Process in-network negotiated rates from raw DataFrame.
     
     Returns:
-        DataFrame with flattened rates, or None if in_network field doesn't exist
+        DataFrame with flattened rates, or None if target array field doesn't exist
     """
     if not has_in_network:
-        LOG.info("No in_network field found. Skipping rates processing.")
+        LOG.info("No %s field found. Skipping rates processing.", array_column)
         return None
     
-    LOG.info("Processing in-network negotiated rates...")
+    LOG.info("Processing negotiated rates from top-level array '%s'...", array_column)
     
     try:
         base_cols = ["source_file"]
         
-        # Step 1: Explode in_network array and limit to first 10k rows
+        explode_array = F.explode_outer if preserve_null_arrays else F.explode
+
+        # Step 1: Explode target top-level array
         df = raw.select(
             *base_cols,
-            F.explode_outer("in_network").alias("in_network_item")
+            explode_array(F.col(array_column)).alias("in_network_item")
         )
         
         # Step 2: Process in_network_item level - extract scalars, identify arrays
@@ -50,15 +54,20 @@ def process_in_network_rates(
         
         df = df.select(*select_cols)
         
-        # Step 3: Explode arrays in order (covered_services first, then negotiated_rates)
+        # Step 3: Explode arrays found at this level.
+        # Keep provider reference arrays optional (explode_outer) so empty provider refs
+        # do not erase otherwise valid negotiated price rows.
         for array_name, array_path, array_alias, element_type in array_fields:
             LOG.info(f"Exploding {array_path} (alias: {array_alias})...")
             
             # Get current columns (excluding the array we're about to explode)
             current_cols = [F.col(col) for col in df.columns if col != array_alias]
             
-            # Explode the array
-            explode_expr = F.explode_outer(F.col(array_alias)).alias(array_alias)
+            # Explode the array.
+            # Provider reference arrays are optional in many files, so preserve rows
+            # when they are null/empty.
+            explode_expr_fn = F.explode_outer if "provider_reference" in array_name.lower() else explode_array
+            explode_expr = explode_expr_fn(F.col(array_alias)).alias(array_alias)
             
             df = df.select(
                 *current_cols,
@@ -85,7 +94,10 @@ def process_in_network_rates(
                     
                     nested_current_cols = [F.col(col) for col in df.columns if col != nested_array_alias]
                     
-                    nested_explode_expr = F.explode_outer(F.col(nested_array_alias)).alias(nested_array_alias)
+                    nested_explode_expr_fn = (
+                        F.explode_outer if "provider_reference" in nested_array_name.lower() else explode_array
+                    )
+                    nested_explode_expr = nested_explode_expr_fn(F.col(nested_array_alias)).alias(nested_array_alias)
                     
                     df = df.select(
                         *nested_current_cols,
@@ -130,7 +142,7 @@ def process_in_network_rates(
                     LOG.info(f"Exploding {service_code_col}...")
                     rates = rates.withColumn(service_code_col, F.explode_outer(service_code_col))
         
-        LOG.info("In-network rates processing complete.")
+        LOG.info("Rates processing complete for array '%s'.", array_column)
         return rates
         
     except Exception as e:
@@ -156,72 +168,57 @@ def join_rates_with_providers(
         LOG.info("No providers dataframe available. Skipping join step.")
         return rates
     else:
-        # Find column in rates that contains provider_group_id
-        provider_group_id_col = None
-        for col in rates.columns:
-            if "provider_group_id" in col:
-                provider_group_id_col = col
-                break
-        
-        if provider_group_id_col is None:
-            # Also check for provider_reference pattern (might be an array)
-            for col in rates.columns:
-                if "provider_reference" in col.lower():
-                    provider_group_id_col = col
-                    break
-        
-        if provider_group_id_col is None:
-            LOG.info("No provider_group_id or provider_reference column found in rates. Skipping join step.")
+        candidate_keys = ["provider_group_id", "provider_reference", "provider_references"]
+
+        def pick_join_col(columns: list[str]) -> Optional[str]:
+            lower_to_original = {c.lower(): c for c in columns}
+
+            # Prefer exact column-name matches first.
+            for key in candidate_keys:
+                if key in lower_to_original:
+                    return lower_to_original[key]
+
+            # Fallback to nested/aliased names that end with or contain the candidate key.
+            for key in candidate_keys:
+                suffix = f"|{key}"
+                for col_name in columns:
+                    c = col_name.lower()
+                    if c.endswith(suffix) or suffix in c or key in c:
+                        return col_name
+            return None
+
+        rates_join_col = pick_join_col(rates.columns)
+        provider_join_col = pick_join_col(provider_flat.columns)
+
+        if rates_join_col is None:
+            LOG.info("No join key found in rates. Candidate keys: %s. Skipping join step.", candidate_keys)
             return rates
-        else:
-            LOG.info(f"Found provider column: {provider_group_id_col}")
-            LOG.info("Joining rates with providers on provider_group_id...")
-            
-            # Check if it's an array (needs to be exploded) or already a scalar
-            is_array = False
-            try:
-                for field in rates.schema.fields:
-                    if field.name == provider_group_id_col:
-                        if isinstance(field.dataType, T.ArrayType):
-                            is_array = True
-                        break
-            except:
-                pass
-            
-            if is_array:
-                # Explode the array to get individual provider_group_id values, cast to string
-                rate_cols = [col for col in rates.columns if col != provider_group_id_col]
-                rates_exploded = rates.select(
-                    *rate_cols,
-                    F.explode_outer(provider_group_id_col).cast("string").alias("provider_group_id")
-                )
-            else:
-                # Already a scalar, just rename if needed, cast to string
-                rate_cols = [col for col in rates.columns if col != provider_group_id_col]
-                if provider_group_id_col != "provider_group_id":
-                    rates_exploded = rates.select(
-                        *rate_cols,
-                        F.col(provider_group_id_col).cast("string").alias("provider_group_id")
-                    )
-                else:
-                    # Cast existing column to string
-                    rates_exploded = rates.withColumn("provider_group_id", F.col("provider_group_id").cast("string"))
-            
-            # Join with providers on provider_group_id
-            # Include provider_url_file if it exists (for URL-based provider references)
-            provider_cols = ["provider_group_id", "npi"]
-            if "provider_url_file" in provider_flat.columns:
-                provider_cols.append("provider_url_file")
-            
-            LOG.info(f"Joining on provider_group_id. Provider columns to select: {provider_cols}")
-            LOG.info(f"rates_exploded columns: {rates_exploded.columns}")
-            LOG.info(f"provider_flat columns: {provider_flat.columns}")
-            
-            rates_with_providers = rates_exploded.join(
-                provider_flat.select(*provider_cols),
-                on="provider_group_id",
-                how="left"
-            )
-            
-            LOG.info("Join complete (lazy - will execute on write).")
-            return rates_with_providers
+        if provider_join_col is None:
+            LOG.info("No join key found in provider_flat. Candidate keys: %s. Skipping join step.", candidate_keys)
+            return rates
+
+        LOG.info(
+            "Joining rates with providers using rates column '%s' and provider column '%s'.",
+            rates_join_col,
+            provider_join_col,
+        )
+
+        rates_for_join = rates.withColumn("__join_provider_key", F.col(rates_join_col).cast("string"))
+        provider_for_join = provider_flat.withColumn("__join_provider_key", F.col(provider_join_col).cast("string"))
+
+        provider_cols = ["__join_provider_key", "npi"]
+        if "provider_url_file" in provider_flat.columns:
+            provider_cols.append("provider_url_file")
+
+        LOG.info("Provider columns selected for join payload: %s", provider_cols)
+        LOG.info("rates columns: %s", rates.columns)
+        LOG.info("provider columns: %s", provider_flat.columns)
+
+        rates_with_providers = rates_for_join.join(
+            provider_for_join.select(*provider_cols),
+            on="__join_provider_key",
+            how="left",
+        ).drop("__join_provider_key")
+
+        LOG.info("Join complete (lazy - will execute on write).")
+        return rates_with_providers

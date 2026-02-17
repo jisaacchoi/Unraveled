@@ -5,6 +5,43 @@ from pathlib import Path
 from typing import Iterable, List, Tuple
 
 LOG = logging.getLogger("app.file_finder")
+SPLITTED_PREFIX = "_splitted_"
+
+
+def _base_name_without_split_suffix(file_name: str) -> str:
+    """
+    Normalize split part names to their original base file name.
+    Example: foo_part0003.json.gz -> foo.json.gz
+    """
+    return re.sub(r"_part\d{4}(\.json(?:\.gz)?)$", r"\1", file_name)
+
+
+def _is_split_part(file_name: str) -> bool:
+    """Return True if file name has split suffix like _part0001.json.gz."""
+    return bool(re.search(r"_part\d{4}(\.json(?:\.gz)?)$", file_name))
+
+
+def _prefer_split_parts(candidate_files: List[Path]) -> List[Path]:
+    """
+    If split parts exist for a base file, exclude the unsplit original to avoid
+    double-processing the same content.
+    """
+    has_split_by_base = {}
+    non_splitted_files = [p for p in candidate_files if not p.name.startswith(SPLITTED_PREFIX)]
+    for p in non_splitted_files:
+        base = _base_name_without_split_suffix(p.name)
+        if _is_split_part(p.name):
+            has_split_by_base[base] = True
+        elif base not in has_split_by_base:
+            has_split_by_base[base] = False
+
+    filtered: List[Path] = []
+    for p in non_splitted_files:
+        base = _base_name_without_split_suffix(p.name)
+        if has_split_by_base.get(base, False) and not _is_split_part(p.name):
+            continue
+        filtered.append(p)
+    return sorted(filtered)
 
 
 def find_source_file(input_directory: Path, source_file: str) -> Tuple[Path, Path]:
@@ -51,7 +88,7 @@ def find_source_file(input_directory: Path, source_file: str) -> Tuple[Path, Pat
         candidate_files = [p for p in input_directory.glob("*.json.gz") if source_file in p.name]
 
     if candidate_files:
-        candidate_files = sorted(candidate_files)
+        candidate_files = _prefer_split_parts(sorted(candidate_files))
         found_file = candidate_files[0]
         found_group = found_file.parent
         LOG.info(f"Found {len(candidate_files)} matching file(s); using {found_file.name} for schema lookup")
@@ -97,8 +134,8 @@ def find_all_file_parts(input_directory: Path, source_file: str) -> List[Path]:
         candidate_files.extend([p for p in group_dir.glob("*.json.gz") if source_file in p.name])
     if not candidate_files:
         candidate_files = [p for p in input_directory.glob("*.json.gz") if source_file in p.name]
-    
-    return sorted(candidate_files)
+
+    return _prefer_split_parts(sorted(candidate_files))
 
 
 def collect_structure_directories_for_files(

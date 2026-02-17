@@ -10,6 +10,7 @@ class ConvertRequest(BaseModel):
     plan_name: Optional[str] = Field(None, description="Plan name to resolve file_name_core (required if file_name not provided)")
     file_name: Optional[str] = Field(None, description="Direct filename to use instead of resolving from plan_name (required if plan_name not provided)")
     cpt_code: Optional[str] = Field(None, description="Comma-separated list of CPT codes")
+    npi: Optional[str] = Field(None, description="Comma-separated list of NPIs (bypasses zipcode lookup)")
     zipcode: Optional[str] = Field(
         None, description="Zipcode to resolve nearby NPIs (optional)"
     )

@@ -59,6 +59,7 @@ def analyze_all_items_comprehensively(
     file_size: int,
     source_name: str,
     max_list_items: int = 10,
+    top_level_is_array: bool = True,
 ) -> Iterator[Dict[str, Any]]:
     """
     Analyze all items for a record_type to build comprehensive structure.
@@ -89,6 +90,57 @@ def analyze_all_items_comprehensively(
     comprehensive_keys: Set[str] = set()
     memo = {}  # Memoization cache shared across all items
     
+    def _yield_item_analysis_records(payload_item: Any, item_idx: int) -> Iterator[Dict[str, Any]]:
+        """
+        Yield analysis records for a single top-level array item.
+
+        Emits an explicit container row for the array element path
+        (e.g., "in_network[0]") so top-level array type and element type
+        are represented separately in mrf_analysis.
+        """
+        initial_path = f"{record_type}[{item_idx}]" if top_level_is_array else record_type
+        item_value_dtype = get_value_dtype(payload_item)
+
+        if top_level_is_array:
+            # Explicit array-element container row (e.g., in_network[0]).
+            # This keeps "in_network" (list) separate from "in_network[0]" (dict/scalar/list).
+            yield {
+                "file_name": file_name,
+                "source_name": source_name,
+                "file_size": file_size,
+                "level": 1,
+                "path": initial_path,
+                "key": record_type,
+                "value": json.dumps(payload_item) if payload_item is not None else None,
+                "value_dtype": item_value_dtype,
+                "url_in_value": has_url(payload_item),
+            }
+
+        # Nested traversal starts one level below the explicit element row.
+        if item_value_dtype == "dict":
+            yield from analyze_json_structure_enhanced(
+                payload_item,
+                file_name,
+                source_name,
+                file_size=file_size,
+                level=2 if top_level_is_array else 1,
+                path=initial_path,
+                max_list_items=max_list_items,
+                memo=memo,
+            )
+        elif item_value_dtype == "list":
+            # Keep list elements traversable even when an array item itself is a list.
+            yield from analyze_json_structure_enhanced(
+                {"_listvalue_": payload_item},
+                file_name,
+                source_name,
+                file_size=file_size,
+                level=2 if top_level_is_array else 1,
+                path=initial_path,
+                max_list_items=max_list_items,
+                memo=memo,
+            )
+
     # Process rare key items first (they're comprehensive)
     for item_idx, (fn, src, fs, rt, rec_idx, payload, has_rare) in rare_key_items:
         LOG.debug("Processing rare key item %d/%d for record_type '%s'", item_idx + 1, len(rare_key_items), record_type)
@@ -111,27 +163,8 @@ def analyze_all_items_comprehensively(
         item_keys, _ = count_unique_keys_in_structure(payload_dict, f"{record_type}[{item_idx}]", memo)
         comprehensive_keys.update(item_keys)
         
-        # Ensure payload is a dict for analysis
-        if not isinstance(payload_dict, dict):
-            if isinstance(payload_dict, list):
-                payload_dict = {"_listvalue_": payload_dict}
-            else:
-                payload_dict = {"_value_": payload_dict}
-        
-        # Build initial path
-        initial_path = f"{record_type}[{item_idx}]"
-        
-        # Analyze structure
-        yield from analyze_json_structure_enhanced(
-            payload_dict,
-            file_name,
-            source_name,
-            file_size=file_size,
-            level=1,
-            path=initial_path,
-            max_list_items=max_list_items,
-            memo=memo,
-        )
+        # Analyze this top-level array item with explicit item container row.
+        yield from _yield_item_analysis_records(payload_dict, item_idx)
     
     # Process common items, but only if they have keys we haven't seen
     for item_idx, (fn, src, fs, rt, rec_idx, payload, has_rare) in common_items:
@@ -156,27 +189,8 @@ def analyze_all_items_comprehensively(
             LOG.debug("Common item %d has %d new key(s): %s", item_idx, len(new_keys), sorted(list(new_keys))[:5])
             comprehensive_keys.update(new_keys)
             
-            # Ensure payload is a dict for analysis
-            if not isinstance(payload_dict, dict):
-                if isinstance(payload_dict, list):
-                    payload_dict = {"_listvalue_": payload_dict}
-                else:
-                    payload_dict = {"_value_": payload_dict}
-            
-            # Build initial path
-            initial_path = f"{record_type}[{item_idx}]"
-            
-            # Analyze structure
-            yield from analyze_json_structure_enhanced(
-                payload_dict,
-                file_name,
-                source_name,
-                file_size=file_size,
-                level=1,
-                path=initial_path,
-                max_list_items=max_list_items,
-                memo=memo,
-            )
+            # Analyze this top-level array item with explicit item container row.
+            yield from _yield_item_analysis_records(payload_dict, item_idx)
     
     LOG.info("Comprehensive analysis complete for record_type '%s': discovered %d unique keys across all items",
              record_type, len(comprehensive_keys))
@@ -296,7 +310,7 @@ def _analyze_files_from_directory_comprehensive(
         
         LOG.info("Found %d record(s) in mrf_landing for file: %s (original: %s), starting comprehensive analysis...",
                 len(rows), file_name_with_prefix, original_file_name)
-        
+
         # Group rows by record_type
         rows_by_record_type: Dict[str, List[Tuple]] = {}
         for row in rows:
@@ -320,9 +334,9 @@ def _analyze_files_from_directory_comprehensive(
             # Use original_file_name from outer scope to ensure consistency (database stores original names)
             fn_norm = _normalize_file_name(original_file_name)
             
-            # Record top-level structure (level 0)
-            # Determine if this is an array based on number of rows
-            is_array = len(type_rows) > 1
+            # Record top-level structure (level 0).
+            # Do NOT infer arrays from row count: duplicate ingestions can create
+            # multiple rows for scalar keys and incorrectly force list dtype.
             
             # Get representative payload for top-level analysis
             # Use first rare key item if available, otherwise first item
@@ -346,6 +360,9 @@ def _analyze_files_from_directory_comprehensive(
             else:
                 rep_payload_dict = rep_payload
             
+            # Track whether payload was originally a list before optional unwrapping.
+            rep_payload_was_list = isinstance(rep_payload_dict, list)
+
             # Unwrap if wrapped in list
             if isinstance(rep_payload_dict, list) and len(rep_payload_dict) == 1:
                 rep_payload_dict = rep_payload_dict[0]
@@ -375,9 +392,10 @@ def _analyze_files_from_directory_comprehensive(
             if is_array_from_landing:
                 top_level_value_dtype = "list"
                 LOG.debug("Record_type '%s' forced to 'list' based on array_start_offset in mrf_landing", record_type)
-            elif is_array:
-                # Multiple rows = array
+            elif rep_payload_was_list:
+                # Single-row files can still represent arrays (e.g., payload wrapped as [item]).
                 top_level_value_dtype = "list"
+                LOG.debug("Record_type '%s' forced to 'list' because representative payload was a list", record_type)
             else:
                 # Single row: determine from payload
                 top_level_value_dtype = get_value_dtype(rep_payload_dict)
@@ -413,6 +431,7 @@ def _analyze_files_from_directory_comprehensive(
                 file_size,
                 source_name,
                 max_list_items=max_list_items,
+                top_level_is_array=(top_level_value_dtype == "list"),
             ):
                 path_group = analysis_record["path"]
                 

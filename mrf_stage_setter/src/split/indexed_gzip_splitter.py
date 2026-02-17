@@ -568,7 +568,7 @@ def process_single_array(
                 
                 # Get next part number (thread-safe)
                 part_num = get_next_part_num()
-                part_path = output_dir / f"{stem}_part{part_num:04d}.json.gz"
+                part_path = output_dir / f"{stem}_part{part_num:05d}.json.gz"
                 
                 # Use pre-parsed items if available
                 items_to_write = []
@@ -628,7 +628,7 @@ def process_single_array(
         # Write remaining items in buffer
         if items_buffer:
             part_num = get_next_part_num()
-            part_path = output_dir / f"{stem}_part{part_num:04d}.json.gz"
+            part_path = output_dir / f"{stem}_part{part_num:05d}.json.gz"
             
             items_to_write = []
             for item_bytes, parsed_item in items_buffer:
@@ -778,7 +778,7 @@ def split_json_gz_with_indexed_gzip(
         
         # Write part 000 with scalars
         if scalars:
-            part_000_path = output_dir / f"{stem}_part{part_num:04d}.json.gz"
+            part_000_path = output_dir / f"{stem}_part{part_num:05d}.json.gz"
             LOG.info("Writing part 000 with %d scalar value(s)...", len(scalars))
             
             scalars_converted = convert_decimals(scalars)

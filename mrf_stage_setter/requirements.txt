@@ -9,6 +9,7 @@ urllib3>=1.26.0  # URL handling (dependency of requests)
 
 # Large file processing
 indexed-gzip>=1.7.0  # Random access to gzipped files without full decompression
+ijson>=3.2.0  # Streaming JSON parser for small-file ingestion path
 
 # Progress tracking
 tqdm>=4.64.0  # Progress bars for long-running operations

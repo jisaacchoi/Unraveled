@@ -132,7 +132,7 @@ See `config.yaml` for all available options and their descriptions.
    ↓
 5. Split
    ↓
-   Large files split into part files (_part0000.json.gz, _part0001.json.gz, ...)
+   Large files split into part files (_part00000.json.gz, _part00001.json.gz, ...)
    Original files renamed to .part extension
 ```
 

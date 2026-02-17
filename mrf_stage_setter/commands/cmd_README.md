@@ -148,7 +148,7 @@ python commands/05_split.py --config config.yaml
 - `database.*` - PostgreSQL connection settings
 
 **Output:**
-- Part files: `{filename}_part0000.json.gz`, `{filename}_part0001.json.gz`, etc.
+- Part files: `{filename}_part00000.json.gz`, `{filename}_part00001.json.gz`, etc.
 - Original file renamed to `{filename}.json.gz.part`
 
 **Features:**

@@ -14,6 +14,7 @@ from src.ingest.indexed_gzip_ingester import build_and_export_index
 from src.split.indexed_gzip_splitter import split_json_gz_with_indexed_gzip
 
 LOG = logging.getLogger("app.plan_files")
+SPLITTED_PREFIX = "_splitted_"
 
 
 def _get_download_dir(config) -> Optional[Path]:
@@ -244,6 +245,9 @@ def split_files_if_needed(
     for file_path in file_paths:
         if not file_path.exists():
             continue
+        if file_path.name.startswith(SPLITTED_PREFIX):
+            updated_paths.append(file_path)
+            continue
         if "_part" in file_path.name:
             updated_paths.append(file_path)
             continue
@@ -274,7 +278,7 @@ def split_files_if_needed(
             )
             if parts_created > 0:
                 try:
-                    file_path.rename(file_path.with_name(file_path.name + ".part"))
+                    file_path.rename(file_path.with_name(f"{SPLITTED_PREFIX}{file_path.name}"))
                 except Exception as exc:  # noqa: BLE001
                     LOG.warning("Split succeeded but failed to rename %s: %s", file_path, exc)
         except Exception as exc:  # noqa: BLE001

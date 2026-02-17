@@ -20,7 +20,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 # Add project root to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.shared.config import configure_logging, get_log_file_path, load_config
 from src.shared.database import build_connection_string, ensure_table_exists
 from src.ingest.indexed_gzip_ingester_rare_keys import ingest_file_indexed_gzip_rare_keys
+from src.ingest.ijson_ingester_rare_keys import ingest_file_ijson_rare_keys
 from src.shared.file_prefix import PREFIX_INGESTED
 
 LOG = logging.getLogger("commands.ingest_rare_keys")
@@ -59,7 +60,7 @@ def create_mrf_landing_indexes(connection_string: str) -> None:
 
 
 def _ingest_single_file_worker(
-    file_info: Tuple[str, str, str, int, int, int, Optional[str], str, Optional[str], int, int, int, int, float, float, Optional[int], float, int]
+    file_info: Tuple[str, str, str, int, int, int, Optional[str], str, Optional[str], int, int, int, int, float, float, Optional[int], float, int, Tuple[str, ...], int]
 ) -> int:
     """
     Worker function for multiprocessing - repeatedly scans and ingests files.
@@ -75,7 +76,7 @@ def _ingest_single_file_worker(
     (input_dir_str, source_name, connection_string, batch_size, max_array_items, worker_id,
      log_file_path, index_path_base_str, log_format, log_datefmt, scan_chunk_read_bytes,
      max_span_size, num_key_threads, progress_every_chunks, poll_interval_seconds,
-     min_file_size_mb_for_indexed_gzip, max_idle_polls, num_rare_keys, num_workers) = file_info
+     min_file_size_mb_for_indexed_gzip, max_idle_polls, num_rare_keys, forced_top_level_arrays, num_workers) = file_info
     
     process_id = os.getpid()
     
@@ -94,6 +95,7 @@ def _ingest_single_file_worker(
         "commands.ingest_rare_keys",
         "src.indexed_gzip_ingester_rare_keys",
         "src.ingest.indexed_gzip_ingester_rare_keys",
+        "src.ingest.ijson_ingester_rare_keys",
     ]
     
     for logger_name in loggers_to_configure:
@@ -203,33 +205,44 @@ def _ingest_single_file_worker(
             temp_index_file = None
             
             if original_name.endswith(".gz"):
-                # Use persistent index for all .gz files (both large and small)
-                # Same logic for all files - build index file for better performance
-                if index_path_base:
-                    file_index_path = index_path_base / f"{original_name}.gzi"
+                if file_size_mb < min_file_size_mb_for_indexed_gzip:
+                    worker_log.info(
+                        f"[PID:{process_id}] [worker:{worker_id}] Using ijson ingester: {original_name} "
+                        f"({file_size_mb:.1f} MB < {min_file_size_mb_for_indexed_gzip} MB)"
+                    )
+                    result = ingest_file_ijson_rare_keys(
+                        connection_string=connection_string,
+                        file_path=part_path,
+                        source_name=source_name,
+                        batch_size=batch_size,
+                        max_array_items=max_array_items,
+                    )
                 else:
-                    file_index_path = part_path.with_name(f"{original_name}.gzi")
-                
-                if file_size_mb >= min_file_size_mb_for_indexed_gzip:
-                    worker_log.info(f"[PID:{process_id}] [worker:{worker_id}] Using indexed_gzip with persistent index: {original_name} ({file_size_mb:.1f} MB >= {min_file_size_mb_for_indexed_gzip} MB)")
-                else:
-                    worker_log.info(f"[PID:{process_id}] [worker:{worker_id}] Using indexed_gzip with persistent index: {original_name} ({file_size_mb:.1f} MB < {min_file_size_mb_for_indexed_gzip} MB, building index anyway)")
-                
-                # Use indexed_gzip for all .gz files
-                result = ingest_file_indexed_gzip_rare_keys(
-                    connection_string=connection_string,
-                    file_path=part_path,
-                    source_name=source_name,
-                    batch_size=batch_size,
-                    show_progress=False,
-                    max_array_items=max_array_items,
-                    index_path=file_index_path,
-                    chunk_size=scan_chunk_read_bytes,
-                    max_span_size=max_span_size,
-                    num_key_threads=num_key_threads,
-                    progress_every_chunks=progress_every_chunks,
-                    num_rare_keys=num_rare_keys,
-                )
+                    # Use persistent index for indexed_gzip path.
+                    if index_path_base:
+                        file_index_path = index_path_base / f"{original_name}.gzi"
+                    else:
+                        file_index_path = part_path.with_name(f"{original_name}.gzi")
+
+                    worker_log.info(
+                        f"[PID:{process_id}] [worker:{worker_id}] Using indexed_gzip with persistent index: "
+                        f"{original_name} ({file_size_mb:.1f} MB >= {min_file_size_mb_for_indexed_gzip} MB)"
+                    )
+                    result = ingest_file_indexed_gzip_rare_keys(
+                        connection_string=connection_string,
+                        file_path=part_path,
+                        source_name=source_name,
+                        batch_size=batch_size,
+                        show_progress=False,
+                        max_array_items=max_array_items,
+                        index_path=file_index_path,
+                        chunk_size=scan_chunk_read_bytes,
+                        max_span_size=max_span_size,
+                        num_key_threads=num_key_threads,
+                        progress_every_chunks=progress_every_chunks,
+                        num_rare_keys=num_rare_keys,
+                        forced_top_level_arrays=list(forced_top_level_arrays),
+                    )
             else:
                 worker_log.warning(f"[PID:{process_id}] [worker:{worker_id}] Non-gzip file not supported: {original_name}")
                 result = 1
@@ -295,14 +308,27 @@ def main() -> int:
     
     # Rare key settings
     num_rare_keys = ingestion_cfg.get("num_rare_keys", 10)  # Default: 10 least common keys per array
+    forced_top_level_arrays_raw = ingestion_cfg.get("forced_top_level_arrays", [])
+    if isinstance(forced_top_level_arrays_raw, str):
+        forced_top_level_arrays: List[str] = [forced_top_level_arrays_raw.strip()] if forced_top_level_arrays_raw.strip() else []
+    elif isinstance(forced_top_level_arrays_raw, list):
+        forced_top_level_arrays = [str(k).strip() for k in forced_top_level_arrays_raw if str(k).strip()]
+    else:
+        forced_top_level_arrays = []
     
     # Auto-detect CPU count if num_workers is None
     if num_workers is None:
         num_workers = os.cpu_count() or 1
         LOG.info("Auto-detected CPU count: %d workers", num_workers)
     
-    LOG.info("Ingestion configuration: batch_size=%d, max_array_items=%d, num_workers=%d, num_rare_keys=%d", 
-             batch_size, max_array_items, num_workers, num_rare_keys)
+    LOG.info(
+        "Ingestion configuration: batch_size=%d, max_array_items=%d, num_workers=%d, num_rare_keys=%d, forced_top_level_arrays=%s",
+        batch_size,
+        max_array_items,
+        num_workers,
+        num_rare_keys,
+        forced_top_level_arrays,
+    )
     
     # Ensure table exists once before processing any files
     if auto_create:
@@ -372,35 +398,48 @@ def main() -> int:
             file_index_path = None
             
             if original_name.endswith(".gz"):
-                # Use persistent index for all .gz files (both large and small)
-                # Same logic for all files - build index file for better performance
-                if index_path_base:
-                    file_index_path = index_path_base / f"{original_name}.gzi"
+                if file_size_mb < min_file_size_mb_for_indexed_gzip:
+                    LOG.info(
+                        "Using ijson ingester: %s (%.1f MB < %.1f MB)",
+                        original_name,
+                        file_size_mb,
+                        min_file_size_mb_for_indexed_gzip,
+                    )
+                    result = ingest_file_ijson_rare_keys(
+                        connection_string=connection_string,
+                        file_path=part_path,
+                        source_name=source_name,
+                        batch_size=batch_size,
+                        max_array_items=max_array_items,
+                    )
                 else:
-                    file_index_path = part_path.with_name(f"{original_name}.gzi")
-            
-                if file_size_mb >= min_file_size_mb_for_indexed_gzip:
-                    LOG.info("Using indexed_gzip with persistent index: %s (%.1f MB >= %.1f MB)", 
-                            original_name, file_size_mb, min_file_size_mb_for_indexed_gzip)
-                else:
-                    LOG.info("Using indexed_gzip with persistent index: %s (%.1f MB < %.1f MB, building index anyway)", 
-                            original_name, file_size_mb, min_file_size_mb_for_indexed_gzip)
-                
-                # Use indexed_gzip for all .gz files
-                result = ingest_file_indexed_gzip_rare_keys(
-                    connection_string=connection_string,
-                    file_path=part_path,
-                    source_name=source_name,
-                    batch_size=batch_size,
-                    show_progress=True,
-                    max_array_items=max_array_items,
-                    index_path=file_index_path,
-                    chunk_size=chunk_size,
-                    max_span_size=max_span_size,
-                    num_key_threads=num_key_threads,
-                    progress_every_chunks=progress_every_chunks,
-                    num_rare_keys=num_rare_keys,
-                )
+                    # Use persistent index for indexed_gzip path.
+                    if index_path_base:
+                        file_index_path = index_path_base / f"{original_name}.gzi"
+                    else:
+                        file_index_path = part_path.with_name(f"{original_name}.gzi")
+
+                    LOG.info(
+                        "Using indexed_gzip with persistent index: %s (%.1f MB >= %.1f MB)",
+                        original_name,
+                        file_size_mb,
+                        min_file_size_mb_for_indexed_gzip,
+                    )
+                    result = ingest_file_indexed_gzip_rare_keys(
+                        connection_string=connection_string,
+                        file_path=part_path,
+                        source_name=source_name,
+                        batch_size=batch_size,
+                        show_progress=True,
+                        max_array_items=max_array_items,
+                        index_path=file_index_path,
+                        chunk_size=chunk_size,
+                        max_span_size=max_span_size,
+                        num_key_threads=num_key_threads,
+                        progress_every_chunks=progress_every_chunks,
+                        num_rare_keys=num_rare_keys,
+                        forced_top_level_arrays=forced_top_level_arrays,
+                    )
             else:
                 LOG.error("Non-gzip file not supported: %s", original_name)
                 result = 1
@@ -449,6 +488,7 @@ def main() -> int:
         min_file_size_mb_for_indexed_gzip,
         max_idle_polls,
         num_rare_keys,
+        tuple(forced_top_level_arrays),
         num_workers,  # Pass num_workers to each worker for dynamic file assignment
     )
     

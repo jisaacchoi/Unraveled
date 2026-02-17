@@ -418,7 +418,7 @@ def split_json_gz(
     
     for chunk_data in stream_all_arrays(input_path, array_keys, chunk_size, file_name=file_name):
         files_created += 1
-        output_path = output_dir / f"{stem}_part{files_created:04d}.json.gz"
+        output_path = output_dir / f"{stem}_part{files_created:05d}.json.gz"
         
         # Build output JSON: scalars + array chunks
         output_data = dict(scalars)

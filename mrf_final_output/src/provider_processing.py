@@ -33,6 +33,7 @@ def process_provider_references(
     raw: DataFrame,
     has_provider_references: bool,
     download_dir: Optional[Path] = None,
+    provider_array_column: str = "provider_references",
 ) -> tuple[Optional[DataFrame], Optional[DataFrame]]:
     """
     Process provider references from raw DataFrame.
@@ -53,15 +54,15 @@ def process_provider_references(
         - provider_urls: DataFrame with provider_group_id and location URL (for downloading)
     """
     if not has_provider_references:
-        LOG.info("No provider_references field found. Skipping providers dataframe creation.")
+        LOG.info("No %s field found. Skipping providers dataframe creation.", provider_array_column)
         return None, None
     
-    LOG.info("Processing provider references...")
+    LOG.info("Processing provider references from top-level array '%s'...", provider_array_column)
     
     # First, explode provider_references to get individual entries
     pr = raw.select(
         "source_file",
-        F.explode_outer("provider_references").alias("pr")
+        F.explode_outer(F.col(provider_array_column)).alias("pr")
     )
     
     # Check schema to see what fields are available
