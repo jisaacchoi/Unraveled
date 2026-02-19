@@ -36,6 +36,23 @@ LOG = logging.getLogger("src.indexed_gzip_ingester_rare_keys")
 KEY_PATTERN = re.compile(rb'"((?:\\.|[^"\\]){1,512})"\s*:')
 
 
+def _configure_csv_field_size_limit() -> int:
+    """Raise CSV parser field limit to the largest value supported on this platform."""
+    limit = sys.maxsize
+    while limit > 131072:
+        try:
+            csv.field_size_limit(limit)
+            return limit
+        except OverflowError:
+            limit //= 10
+    csv.field_size_limit(131072)
+    return 131072
+
+
+CSV_FIELD_SIZE_LIMIT = _configure_csv_field_size_limit()
+LOG.info("Configured csv.field_size_limit=%d", CSV_FIELD_SIZE_LIMIT)
+
+
 @dataclass
 class KeyHit:
     """Represents a unique key occurrence with its position."""
@@ -53,6 +70,10 @@ class ScanResult:
     array_starts: Dict[str, int]  # Array start offsets: {array_key: start_offset}
     forced_key_offsets: Dict[str, Tuple[int, int]]  # Forced keys: {key: (first_offset, last_offset)}
     forced_key_array_starts: Dict[str, Tuple[Optional[int], Optional[int]]]  # Forced keys: {key: (first_array_start, last_array_start)}
+
+
+class RareKeyExtractionExhaustedError(RuntimeError):
+    """Raised when rare-key item extraction fails after all span-size attempts."""
 
 
 def _decode_json_string_bytes(b: bytes) -> str:
@@ -464,6 +485,7 @@ def identify_rare_keys_by_array(
     
     # Identify top-level arrays (arrays that are values of top-level keys)
     top_level_array_names = set()
+    top_level_key_names = set(unique_hits.keys()) if unique_hits else set()
     if unique_hits:
         for top_level_key in unique_hits.keys():
             if top_level_key in array_starts:
@@ -481,6 +503,11 @@ def identify_rare_keys_by_array(
     occurrences_by_array: Dict[str, Dict[str, tuple[int, int]]] = {}  # {array: {key: (count, first_offset)}}
     
     for key, (count, first_offset) in key_occurrences.items():
+        # Top-level keys are section anchors, not rare nested keys.
+        if key in top_level_key_names:
+            LOG.debug("Skipping top-level key '%s' from rare-key candidates", key)
+            continue
+
         # Use only the first occurrence to determine which array this key belongs to
         
         # Find the top-level array that contains this first occurrence
@@ -1030,18 +1057,18 @@ def extract_items_with_rare_keys(
 ) -> List[Tuple[dict, bool]]:
     """
     Extract items from array that contain rare keys.
-    Tries increasing span sizes (200KB, 500KB, 1MB) until item is found.
-    If found, extracts only one item. If not found, returns empty list for fallback.
+    Tries increasing span sizes (200KB, 500KB, 1MB, 15MB, 20MB) until item is found.
+    If found, extracts only one item. If not found, raises to fail the file.
     
     Args:
         f: IndexedGzipFile (already opened)
         array_key: Name of the array
         rare_keys: Dict mapping rare key names to their offsets
         max_array_items: Maximum items to extract (used only if rare key extraction fails)
-        padding: Initial padding size (will try increasing sizes: 200KB, 500KB, 1MB)
+        padding: Initial padding size (will try increasing sizes: 200KB, 500KB, 1MB, 15MB, 20MB)
         
     Returns:
-        List of (item_dict, has_rare_keys) tuples. If empty, caller should fall back to regular extraction.
+        List of (item_dict, has_rare_keys) tuples.
     """
     items = []
     seen_item_starts = set()  # Track item start offsets to avoid duplicates
@@ -1070,8 +1097,14 @@ def extract_items_with_rare_keys(
     file_size = f.tell()
     f.seek(current_pos)  # Restore position
     
-    # Try increasing padding sizes: 200KB, 500KB, 1MB
-    padding_sizes = [204800, 512000, 1048576]  # 200KB, 500KB, 1MB
+    # Try increasing padding sizes from fast path to large fallback.
+    padding_sizes = [
+        200 * 1024,        # 200KB
+        500 * 1024,        # 500KB
+        1 * 1024 * 1024,   # 1MB
+        15 * 1024 * 1024,  # 15MB
+        20 * 1024 * 1024,  # 20MB
+    ]
     
     for idx, (rare_key_offset, rare_key_name) in enumerate(rare_key_samples, 1):
         LOG.info("  [%d/%d] Processing rare key '%s' at absolute offset %d", 
@@ -1130,17 +1163,20 @@ def extract_items_with_rare_keys(
                 LOG.info("    ⊗ Skipped duplicate item (start offset %d already seen)", item_start_approx)
         else:
             LOG.warning("    ✗ Failed to extract item for rare key '%s' after trying all span sizes", rare_key_name)
+            raise RareKeyExtractionExhaustedError(
+                f"Failed rare-key extraction for array '{array_key}', key '{rare_key_name}' "
+                "after trying all span sizes"
+            )
     
     # If we found items with rare keys, return them (only one per rare key)
     if items:
         LOG.info("Extracted %d unique item(s) with rare keys from array '%s'", len(items), array_key)
         return items
     
-    # If nothing found, fall back to regular extraction of top N items
-    LOG.warning("No items found with rare keys. Falling back to extracting top %d items from array '%s'", 
-               max_array_items, array_key)
-    # Return empty list - the caller should handle the fallback to regular extraction
-    return []
+    # No items were extracted despite rare key candidates being present.
+    raise RareKeyExtractionExhaustedError(
+        f"No items extracted for rare-key array '{array_key}' despite rare key candidates"
+    )
 
 
 def extract_scalar_or_first_n_from_span(
@@ -1383,17 +1419,6 @@ def process_single_key_with_rare_keys(
                 max_array_items,
             )
             
-            # If rare key extraction failed, fall back to regular extraction
-            if not rare_key_items:
-                # Fall back to regular extraction of top N items
-                LOG.info("Rare key extraction failed for '%s', falling back to extracting top %d items", 
-                        key_name, max_array_items)
-                rare_key_items = []
-                for item_idx, item in enumerate(val):
-                    if item_idx >= max_array_items:
-                        break
-                    rare_key_items.append((item, False))  # False = no rare keys
-            
             # Store rare key items (or fallback items)
             for item_idx, (item, has_rare_keys) in enumerate(rare_key_items):
                 payload_converted = convert_decimals(item)
@@ -1445,14 +1470,22 @@ def process_single_key_with_rare_keys(
             
             # If rare key items were found, we're done - don't extract additional items
             # (The whole point is to get items with rare keys, not fill up to max_array_items)
-        elif isinstance(val, list) and key_name in rare_keys_by_array and not rare_keys_by_array[key_name]:
-            # Array with rare keys but no rare keys found (empty dict) - use regular extraction
-            LOG.info("Array '%s' has no rare keys (all candidates had count >= 3), extracting top %d items", 
-                    key_name, max_array_items)
-            for item_idx, item in enumerate(val):
-                if item_idx >= max_array_items:
-                    break
-                
+        elif isinstance(val, list):
+            # Top-level arrays without rare-key hits: emit only the first item.
+            rare_key_map = rare_keys_by_array.get(key_name, {})
+            if rare_key_map:
+                LOG.warning(
+                    "Array '%s' has rare key map outside rare-key branch; emitting first item only",
+                    key_name,
+                )
+            if val:
+                LOG.info("Array '%s' has no rare keys; extracting first item only", key_name)
+                regular_items = [val[0]]
+            else:
+                LOG.info("Array '%s' is empty; writing empty array payload", key_name)
+                regular_items = [val]
+
+            for item_idx, item in enumerate(regular_items):
                 payload_converted = convert_decimals(item)
                 
                 if HAS_ORJSON:
@@ -1499,10 +1532,8 @@ def process_single_key_with_rare_keys(
                 increment_record_count()
                 records_created += 1
         else:
-            # Non-array or array without rare keys - use original logic
-            if isinstance(val, list):
-                payload = val
-            elif isinstance(val, (dict, str, int, float, bool)) or val is None:
+            # Non-array payloads use original logic.
+            if isinstance(val, (dict, str, int, float, bool)) or val is None:
                 if isinstance(val, dict):
                     payload = val
                 else:

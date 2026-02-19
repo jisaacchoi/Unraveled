@@ -20,9 +20,9 @@ CSV_URL = "https://huggingface.co/datasets/mozay22/medical_code_mapping/raw/main
 PG_CONFIG = {
     "host": "localhost",
     "port": 5432,
-    "dbname": "postgres",
+    "dbname": "postgres_test",
     "user": "postgres",
-    "password": ,
+    "password": "Choi5508!",
 }
 
 TABLE_NAME = "cpt_code"

@@ -14,6 +14,11 @@ class ConvertRequest(BaseModel):
     zipcode: Optional[str] = Field(
         None, description="Zipcode to resolve nearby NPIs (optional)"
     )
+    zipcode_distance_miles: Optional[float] = Field(
+        None,
+        ge=0,
+        description="Optional max distance in miles from zipcode for NPI lookup (e.g., 5).",
+    )
 
 
 class ConvertResponse(BaseModel):

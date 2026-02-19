@@ -231,3 +231,160 @@ AttributeError: 'Engine' object has no attribute 'cursor'
 2026-01-29 16:17:07 - root - INFO - ============================================================
 2026-01-29 16:17:07 - root - INFO - All uploads completed successfully!
 2026-01-29 16:17:07 - root - INFO - ============================================================
+2026-02-17 13:51:56 - root - INFO - Loading configuration from: config.yaml
+2026-02-17 13:51:56 - root - INFO - Connecting to database: postgres_test@localhost
+2026-02-17 13:51:56 - root - INFO - Database connection successful!
+2026-02-17 13:51:56 - __main__ - INFO - Creating table 'zip_code_proximity'...
+2026-02-17 13:51:56 - __main__ - INFO - Dropped existing table 'zip_code_proximity' if it existed
+2026-02-17 13:51:56 - __main__ - INFO - Successfully created table 'zip_code_proximity'
+2026-02-17 13:51:56 - __main__ - INFO - ============================================================
+2026-02-17 13:51:56 - __main__ - INFO - Uploading CSV to PostgreSQL: input/zip_code_proximity.csv
+2026-02-17 13:51:56 - __main__ - INFO - Target table: zip_code_proximity
+2026-02-17 13:51:56 - __main__ - INFO - ============================================================
+2026-02-17 13:51:56 - __main__ - INFO - Reading CSV file in chunks of 100,000 rows...
+2026-02-17 13:51:56 - __main__ - INFO - Chunk 1: Read 100,000 rows (total read: 100,000)
+2026-02-17 13:51:59 - __main__ - INFO - Chunk 1 uploaded. Total uploaded: 100,000 rows
+2026-02-17 13:51:59 - __main__ - INFO - Chunk 2: Read 100,000 rows (total read: 200,000)
+2026-02-17 13:52:01 - __main__ - INFO - Chunk 2 uploaded. Total uploaded: 200,000 rows
+2026-02-17 13:52:01 - __main__ - INFO - Chunk 3: Read 100,000 rows (total read: 300,000)
+2026-02-17 13:52:03 - __main__ - INFO - Chunk 3 uploaded. Total uploaded: 300,000 rows
+2026-02-17 13:52:03 - __main__ - INFO - Chunk 4: Read 100,000 rows (total read: 400,000)
+2026-02-17 13:52:05 - __main__ - INFO - Chunk 4 uploaded. Total uploaded: 400,000 rows
+2026-02-17 13:52:05 - __main__ - INFO - Chunk 5: Read 100,000 rows (total read: 500,000)
+2026-02-17 13:52:08 - __main__ - INFO - Chunk 5 uploaded. Total uploaded: 500,000 rows
+2026-02-17 13:52:08 - __main__ - INFO - Chunk 6: Read 100,000 rows (total read: 600,000)
+2026-02-17 13:52:10 - __main__ - INFO - Chunk 6 uploaded. Total uploaded: 600,000 rows
+2026-02-17 13:52:11 - __main__ - INFO - Chunk 7: Read 100,000 rows (total read: 700,000)
+2026-02-17 13:52:13 - __main__ - INFO - Chunk 7 uploaded. Total uploaded: 700,000 rows
+2026-02-17 13:52:13 - __main__ - INFO - Chunk 8: Read 100,000 rows (total read: 800,000)
+2026-02-17 13:52:16 - __main__ - INFO - Chunk 8 uploaded. Total uploaded: 800,000 rows
+2026-02-17 13:52:16 - __main__ - INFO - Chunk 9: Read 100,000 rows (total read: 900,000)
+2026-02-17 13:52:18 - __main__ - INFO - Chunk 9 uploaded. Total uploaded: 900,000 rows
+2026-02-17 13:52:18 - __main__ - INFO - Chunk 10: Read 100,000 rows (total read: 1,000,000)
+2026-02-17 13:52:21 - __main__ - INFO - Chunk 10 uploaded. Total uploaded: 1,000,000 rows
+2026-02-17 13:52:21 - __main__ - INFO - Chunk 11: Read 100,000 rows (total read: 1,100,000)
+2026-02-17 13:52:23 - __main__ - INFO - Chunk 11 uploaded. Total uploaded: 1,100,000 rows
+2026-02-17 13:52:24 - __main__ - INFO - Chunk 12: Read 100,000 rows (total read: 1,200,000)
+2026-02-17 13:52:26 - __main__ - INFO - Chunk 12 uploaded. Total uploaded: 1,200,000 rows
+2026-02-17 13:52:26 - __main__ - INFO - Chunk 13: Read 100,000 rows (total read: 1,300,000)
+2026-02-17 13:52:29 - __main__ - INFO - Chunk 13 uploaded. Total uploaded: 1,300,000 rows
+2026-02-17 13:52:29 - __main__ - INFO - Chunk 14: Read 100,000 rows (total read: 1,400,000)
+2026-02-17 13:52:31 - __main__ - INFO - Chunk 14 uploaded. Total uploaded: 1,400,000 rows
+2026-02-17 13:52:31 - __main__ - INFO - Chunk 15: Read 100,000 rows (total read: 1,500,000)
+2026-02-17 13:52:34 - __main__ - INFO - Chunk 15 uploaded. Total uploaded: 1,500,000 rows
+2026-02-17 13:52:34 - __main__ - INFO - Chunk 16: Read 100,000 rows (total read: 1,600,000)
+2026-02-17 13:52:36 - __main__ - INFO - Chunk 16 uploaded. Total uploaded: 1,600,000 rows
+2026-02-17 13:52:36 - __main__ - INFO - Chunk 17: Read 100,000 rows (total read: 1,700,000)
+2026-02-17 13:52:39 - __main__ - INFO - Chunk 17 uploaded. Total uploaded: 1,700,000 rows
+2026-02-17 13:52:39 - __main__ - INFO - Chunk 18: Read 100,000 rows (total read: 1,800,000)
+2026-02-17 13:52:41 - __main__ - INFO - Chunk 18 uploaded. Total uploaded: 1,800,000 rows
+2026-02-17 13:52:41 - __main__ - INFO - Chunk 19: Read 100,000 rows (total read: 1,900,000)
+2026-02-17 13:52:44 - __main__ - INFO - Chunk 19 uploaded. Total uploaded: 1,900,000 rows
+2026-02-17 13:52:44 - __main__ - INFO - Chunk 20: Read 100,000 rows (total read: 2,000,000)
+2026-02-17 13:52:47 - __main__ - INFO - Chunk 20 uploaded. Total uploaded: 2,000,000 rows
+2026-02-17 13:52:47 - __main__ - INFO - Chunk 21: Read 100,000 rows (total read: 2,100,000)
+2026-02-17 13:52:49 - __main__ - INFO - Chunk 21 uploaded. Total uploaded: 2,100,000 rows
+2026-02-17 13:52:49 - __main__ - INFO - Chunk 22: Read 100,000 rows (total read: 2,200,000)
+2026-02-17 13:52:52 - __main__ - INFO - Chunk 22 uploaded. Total uploaded: 2,200,000 rows
+2026-02-17 13:52:52 - __main__ - INFO - Chunk 23: Read 100,000 rows (total read: 2,300,000)
+2026-02-17 13:52:54 - __main__ - INFO - Chunk 23 uploaded. Total uploaded: 2,300,000 rows
+2026-02-17 13:52:54 - __main__ - INFO - Chunk 24: Read 100,000 rows (total read: 2,400,000)
+2026-02-17 13:52:57 - __main__ - INFO - Chunk 24 uploaded. Total uploaded: 2,400,000 rows
+2026-02-17 13:52:57 - __main__ - INFO - Chunk 25: Read 100,000 rows (total read: 2,500,000)
+2026-02-17 13:52:59 - __main__ - INFO - Chunk 25 uploaded. Total uploaded: 2,500,000 rows
+2026-02-17 13:52:59 - __main__ - INFO - Chunk 26: Read 100,000 rows (total read: 2,600,000)
+2026-02-17 13:53:02 - __main__ - INFO - Chunk 26 uploaded. Total uploaded: 2,600,000 rows
+2026-02-17 13:53:02 - __main__ - INFO - Chunk 27: Read 100,000 rows (total read: 2,700,000)
+2026-02-17 13:53:04 - __main__ - INFO - Chunk 27 uploaded. Total uploaded: 2,700,000 rows
+2026-02-17 13:53:04 - __main__ - INFO - Chunk 28: Read 100,000 rows (total read: 2,800,000)
+2026-02-17 13:53:07 - __main__ - INFO - Chunk 28 uploaded. Total uploaded: 2,800,000 rows
+2026-02-17 13:53:07 - __main__ - INFO - Chunk 29: Read 100,000 rows (total read: 2,900,000)
+2026-02-17 13:53:09 - __main__ - INFO - Chunk 29 uploaded. Total uploaded: 2,900,000 rows
+2026-02-17 13:53:09 - __main__ - INFO - Chunk 30: Read 100,000 rows (total read: 3,000,000)
+2026-02-17 13:53:12 - __main__ - INFO - Chunk 30 uploaded. Total uploaded: 3,000,000 rows
+2026-02-17 13:53:12 - __main__ - INFO - Chunk 31: Read 100,000 rows (total read: 3,100,000)
+2026-02-17 13:53:14 - __main__ - INFO - Chunk 31 uploaded. Total uploaded: 3,100,000 rows
+2026-02-17 13:53:14 - __main__ - INFO - Chunk 32: Read 100,000 rows (total read: 3,200,000)
+2026-02-17 13:53:17 - __main__ - INFO - Chunk 32 uploaded. Total uploaded: 3,200,000 rows
+2026-02-17 13:53:17 - __main__ - INFO - Chunk 33: Read 100,000 rows (total read: 3,300,000)
+2026-02-17 13:53:19 - __main__ - INFO - Chunk 33 uploaded. Total uploaded: 3,300,000 rows
+2026-02-17 13:53:19 - __main__ - INFO - Chunk 34: Read 100,000 rows (total read: 3,400,000)
+2026-02-17 13:53:22 - __main__ - INFO - Chunk 34 uploaded. Total uploaded: 3,400,000 rows
+2026-02-17 13:53:22 - __main__ - INFO - Chunk 35: Read 100,000 rows (total read: 3,500,000)
+2026-02-17 13:53:24 - __main__ - INFO - Chunk 35 uploaded. Total uploaded: 3,500,000 rows
+2026-02-17 13:53:24 - __main__ - INFO - Chunk 36: Read 100,000 rows (total read: 3,600,000)
+2026-02-17 13:53:27 - __main__ - INFO - Chunk 36 uploaded. Total uploaded: 3,600,000 rows
+2026-02-17 13:53:27 - __main__ - INFO - Chunk 37: Read 100,000 rows (total read: 3,700,000)
+2026-02-17 13:53:29 - __main__ - INFO - Chunk 37 uploaded. Total uploaded: 3,700,000 rows
+2026-02-17 13:53:29 - __main__ - INFO - Chunk 38: Read 100,000 rows (total read: 3,800,000)
+2026-02-17 13:53:32 - __main__ - INFO - Chunk 38 uploaded. Total uploaded: 3,800,000 rows
+2026-02-17 13:53:32 - __main__ - INFO - Chunk 39: Read 100,000 rows (total read: 3,900,000)
+2026-02-17 13:53:34 - __main__ - INFO - Chunk 39 uploaded. Total uploaded: 3,900,000 rows
+2026-02-17 13:53:34 - __main__ - INFO - Chunk 40: Read 100,000 rows (total read: 4,000,000)
+2026-02-17 13:53:37 - __main__ - INFO - Chunk 40 uploaded. Total uploaded: 4,000,000 rows
+2026-02-17 13:53:37 - __main__ - INFO - Chunk 41: Read 100,000 rows (total read: 4,100,000)
+2026-02-17 13:53:40 - __main__ - INFO - Chunk 41 uploaded. Total uploaded: 4,100,000 rows
+2026-02-17 13:53:40 - __main__ - INFO - Chunk 42: Read 100,000 rows (total read: 4,200,000)
+2026-02-17 13:53:42 - __main__ - INFO - Chunk 42 uploaded. Total uploaded: 4,200,000 rows
+2026-02-17 13:53:42 - __main__ - INFO - Chunk 43: Read 100,000 rows (total read: 4,300,000)
+2026-02-17 13:53:45 - __main__ - INFO - Chunk 43 uploaded. Total uploaded: 4,300,000 rows
+2026-02-17 13:53:45 - __main__ - INFO - Chunk 44: Read 100,000 rows (total read: 4,400,000)
+2026-02-17 13:53:48 - __main__ - INFO - Chunk 44 uploaded. Total uploaded: 4,400,000 rows
+2026-02-17 13:53:48 - __main__ - INFO - Chunk 45: Read 100,000 rows (total read: 4,500,000)
+2026-02-17 13:53:50 - __main__ - INFO - Chunk 45 uploaded. Total uploaded: 4,500,000 rows
+2026-02-17 13:53:50 - __main__ - INFO - Chunk 46: Read 100,000 rows (total read: 4,600,000)
+2026-02-17 13:53:53 - __main__ - INFO - Chunk 46 uploaded. Total uploaded: 4,600,000 rows
+2026-02-17 13:53:53 - __main__ - INFO - Chunk 47: Read 100,000 rows (total read: 4,700,000)
+2026-02-17 13:53:56 - __main__ - INFO - Chunk 47 uploaded. Total uploaded: 4,700,000 rows
+2026-02-17 13:53:56 - __main__ - INFO - Chunk 48: Read 100,000 rows (total read: 4,800,000)
+2026-02-17 13:53:58 - __main__ - INFO - Chunk 48 uploaded. Total uploaded: 4,800,000 rows
+2026-02-17 13:53:58 - __main__ - INFO - Chunk 49: Read 100,000 rows (total read: 4,900,000)
+2026-02-17 13:54:01 - __main__ - INFO - Chunk 49 uploaded. Total uploaded: 4,900,000 rows
+2026-02-17 13:54:01 - __main__ - INFO - Chunk 50: Read 100,000 rows (total read: 5,000,000)
+2026-02-17 13:54:04 - __main__ - INFO - Chunk 50 uploaded. Total uploaded: 5,000,000 rows
+2026-02-17 13:54:04 - __main__ - INFO - Chunk 51: Read 100,000 rows (total read: 5,100,000)
+2026-02-17 13:54:06 - __main__ - INFO - Chunk 51 uploaded. Total uploaded: 5,100,000 rows
+2026-02-17 13:54:06 - __main__ - INFO - Chunk 52: Read 100,000 rows (total read: 5,200,000)
+2026-02-17 13:54:09 - __main__ - INFO - Chunk 52 uploaded. Total uploaded: 5,200,000 rows
+2026-02-17 13:54:09 - __main__ - INFO - Chunk 53: Read 100,000 rows (total read: 5,300,000)
+2026-02-17 13:54:12 - __main__ - INFO - Chunk 53 uploaded. Total uploaded: 5,300,000 rows
+2026-02-17 13:54:12 - __main__ - INFO - Chunk 54: Read 100,000 rows (total read: 5,400,000)
+2026-02-17 13:54:15 - __main__ - INFO - Chunk 54 uploaded. Total uploaded: 5,400,000 rows
+2026-02-17 13:54:15 - __main__ - INFO - Chunk 55: Read 100,000 rows (total read: 5,500,000)
+2026-02-17 13:54:17 - __main__ - INFO - Chunk 55 uploaded. Total uploaded: 5,500,000 rows
+2026-02-17 13:54:17 - __main__ - INFO - Chunk 56: Read 100,000 rows (total read: 5,600,000)
+2026-02-17 13:54:20 - __main__ - INFO - Chunk 56 uploaded. Total uploaded: 5,600,000 rows
+2026-02-17 13:54:20 - __main__ - INFO - Chunk 57: Read 100,000 rows (total read: 5,700,000)
+2026-02-17 13:54:22 - __main__ - INFO - Chunk 57 uploaded. Total uploaded: 5,700,000 rows
+2026-02-17 13:54:22 - __main__ - INFO - Chunk 58: Read 100,000 rows (total read: 5,800,000)
+2026-02-17 13:54:25 - __main__ - INFO - Chunk 58 uploaded. Total uploaded: 5,800,000 rows
+2026-02-17 13:54:25 - __main__ - INFO - Chunk 59: Read 100,000 rows (total read: 5,900,000)
+2026-02-17 13:54:27 - __main__ - INFO - Chunk 59 uploaded. Total uploaded: 5,900,000 rows
+2026-02-17 13:54:27 - __main__ - INFO - Chunk 60: Read 100,000 rows (total read: 6,000,000)
+2026-02-17 13:54:30 - __main__ - INFO - Chunk 60 uploaded. Total uploaded: 6,000,000 rows
+2026-02-17 13:54:30 - __main__ - INFO - Chunk 61: Read 63,518 rows (total read: 6,063,518)
+2026-02-17 13:54:31 - __main__ - INFO - Chunk 61 uploaded. Total uploaded: 6,063,518 rows
+2026-02-17 13:54:31 - __main__ - INFO - ============================================================
+2026-02-17 13:54:31 - __main__ - INFO - Successfully uploaded 6,063,518 rows to table 'zip_code_proximity'
+2026-02-17 13:54:31 - __main__ - INFO - ============================================================
+2026-02-17 13:54:31 - __main__ - INFO - ============================================================
+2026-02-17 13:54:31 - __main__ - INFO - Executing post-upload INSERT statement...
+2026-02-17 13:54:31 - __main__ - INFO - ============================================================
+2026-02-17 13:54:41 - __main__ - INFO - Post-upload INSERT completed. Rows affected: 33756
+2026-02-17 13:54:41 - __main__ - INFO - ============================================================
+2026-02-17 13:54:41 - __main__ - INFO - Creating table 'zip_zcta_xref'...
+2026-02-17 13:54:41 - __main__ - INFO - Dropped existing table 'zip_zcta_xref' if it existed
+2026-02-17 13:54:41 - __main__ - INFO - Successfully created table 'zip_zcta_xref'
+2026-02-17 13:54:41 - __main__ - INFO - ============================================================
+2026-02-17 13:54:41 - __main__ - INFO - Uploading CSV to PostgreSQL: input/zip_zcta_xref.csv
+2026-02-17 13:54:41 - __main__ - INFO - Target table: zip_zcta_xref
+2026-02-17 13:54:41 - __main__ - INFO - ============================================================
+2026-02-17 13:54:41 - __main__ - INFO - Reading CSV file in chunks of 100,000 rows...
+2026-02-17 13:54:41 - __main__ - INFO - Chunk 1: Read 41,131 rows (total read: 41,131)
+2026-02-17 13:54:42 - __main__ - INFO - Chunk 1 uploaded. Total uploaded: 41,131 rows
+2026-02-17 13:54:42 - __main__ - INFO - ============================================================
+2026-02-17 13:54:42 - __main__ - INFO - Successfully uploaded 41,131 rows to table 'zip_zcta_xref'
+2026-02-17 13:54:42 - __main__ - INFO - ============================================================
+2026-02-17 13:54:42 - root - INFO - ============================================================
+2026-02-17 13:54:42 - root - INFO - All uploads completed successfully!
+2026-02-17 13:54:42 - root - INFO - ============================================================

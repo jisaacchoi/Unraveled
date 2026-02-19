@@ -188,7 +188,17 @@ def get_spark_session() -> SparkSession:
     global spark
     if spark is None:
         app_name = get_config_value(config, "spark.app_name", "ParquetConversionAPI")
-        spark = SparkSession.builder.appName(app_name).getOrCreate()
+        builder = SparkSession.builder.appName(app_name)
+
+        # Enable Python fault handlers so worker crashes include actionable Python tracebacks.
+        builder = builder.config("spark.sql.execution.pyspark.udf.faulthandler.enabled", "true")
+        builder = builder.config("spark.python.worker.faulthandler.enabled", "true")
+
+        if spark_python:
+            builder = builder.config("spark.pyspark.python", spark_python)
+            builder = builder.config("spark.pyspark.driver.python", spark_python)
+
+        spark = builder.getOrCreate()
         LOG.info("Spark session created")
     return spark
 
@@ -249,6 +259,7 @@ def process_job(
     cpt_code: Optional[str],
     npi: Optional[str],
     zipcode: Optional[str],
+    zipcode_distance_miles: Optional[float] = None,
 ):
     """Background task to process a conversion job."""
     start_monotonic = time.perf_counter()
@@ -521,6 +532,7 @@ def process_job(
                     "npi": [],
                     "cpt_code": billing_code_list if billing_code_list else [],
                     "zipcode": zipcode,
+                    "zipcode_distance_miles": zipcode_distance_miles,
                 },
                 "processing_timestamp": datetime.utcnow().isoformat() + "Z",
                 "total_rows": 0,
@@ -568,7 +580,11 @@ def process_job(
             npi_list = direct_npi_list
             LOG.info("Using direct NPI filter: %d NPIs", len(npi_list))
         else:
-            npi_list = get_npis_by_zip(config, zipcode) if zipcode else []
+            npi_list = (
+                get_npis_by_zip(config, zipcode, zipcode_distance_miles)
+                if zipcode
+                else []
+            )
         
         # Process file(s) by schema group; append results sequentially
         log_stage("spark_session_acquire_begin")
@@ -630,6 +646,7 @@ def process_job(
                 append_output=(idx > 1),
                 enable_parquet_conversion=enable_parquet_conversion,
                 spark_environment=spark_environment,
+                app_config=config,
             )
             LOG.info(
                 "Job %s group=%s finished elapsed_s=%.2f rows=%s files_written=%s",
@@ -660,6 +677,7 @@ def process_job(
                 "npi": npi_list if npi_list else [],
                 "cpt_code": billing_code_list if billing_code_list else [],
                 "zipcode": zipcode,
+                "zipcode_distance_miles": zipcode_distance_miles,
             },
             "processing_timestamp": datetime.utcnow().isoformat() + "Z",
             "total_rows": total_rows,
@@ -742,6 +760,7 @@ async def convert_file(request: ConvertRequest, background_tasks: BackgroundTask
         cpt_code=request.cpt_code,
         npi=request.npi,
         zipcode=request.zipcode,
+        zipcode_distance_miles=request.zipcode_distance_miles,
     )
     
     return ConvertResponse(

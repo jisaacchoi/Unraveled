@@ -36,15 +36,9 @@ def filter_rates_dataframe(
     # 1. Filter by NPI
     if provider_npi_set and len(provider_npi_set) > 0:
         if "npi" in df.columns:
-            # Use UDF with closure (serverless-compatible, no broadcast needed)
-            # The set is captured in the closure and serialized with the UDF
-            npi_set = provider_npi_set  # Capture in closure
-            def npi_in_set(npi_val):
-                if npi_val is None:
-                    return False
-                return str(npi_val) in npi_set
-            npi_filter_udf = F.udf(npi_in_set, T.BooleanType())
-            df = df.filter(npi_filter_udf(F.col("npi")))
+            # Use native Spark expression instead of Python UDF to avoid Python worker crashes.
+            npi_values = [str(npi) for npi in provider_npi_set]
+            df = df.filter(F.col("npi").cast("string").isin(npi_values))
             LOG.info("Applied NPI filter (lazy)")
         else:
             LOG.warning("'npi' column not found, skipping NPI filter")
@@ -71,17 +65,10 @@ def filter_rates_dataframe(
                 # Check if it looks like ranges (strings with dashes)
                 if all(isinstance(item, str) and ('–' in item or '-' in item or '—' in item) for item in filter_value):
                     # It's a list of ranges
-                    # Create a UDF to safely convert billing codes to numeric
-                    def safe_to_double(value):
-                        if value is None:
-                            return None
-                        try:
-                            return float(str(value))
-                        except (ValueError, TypeError):
-                            return None
-                    
-                    safe_to_double_udf = F.udf(safe_to_double, T.DoubleType())
-                    
+                    # Use native cast to double for numeric comparisons; invalid values become null.
+                    col_str = F.trim(F.col(column_name).cast("string"))
+                    col_numeric = col_str.cast(T.DoubleType())
+
                     range_conditions = []
                     for range_str in filter_value:
                         match = re.match(r'^(.+?)[–—\-](.+)$', range_str.strip())
@@ -91,8 +78,6 @@ def filter_rates_dataframe(
                             try:
                                 start_num = float(start)
                                 end_num = float(end)
-                                # Use UDF to safely convert values to numeric
-                                col_numeric = safe_to_double_udf(F.col(column_name))
                                 range_conditions.append(
                                     col_numeric.isNotNull() &
                                     col_numeric.between(start_num, end_num)
@@ -100,7 +85,7 @@ def filter_rates_dataframe(
                             except (ValueError, TypeError):
                                 # If start/end are not numeric, use string comparison
                                 range_conditions.append(
-                                    (F.col(column_name) >= start) & (F.col(column_name) <= end)
+                                    (col_str >= start) & (col_str <= end)
                                 )
                     
                     if range_conditions:

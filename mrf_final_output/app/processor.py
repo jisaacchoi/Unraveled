@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from pyspark.sql import DataFrame, SparkSession, functions as F, types as T
@@ -21,6 +21,7 @@ from src.rates_processing import (
 )
 from src.filtering import filter_rates_dataframe
 from src.schema_inference import load_schema_from_file
+from app.db_utils import get_provider_data_by_npis
 
 LOG = logging.getLogger("app.processor")
 
@@ -53,6 +54,14 @@ def _flatten_struct_columns_once(df: DataFrame) -> tuple[DataFrame, bool]:
             alias = f"{col_name}|{child_name}"
             select_exprs.append(F.col(f"`{col_name}`.`{child_name}`").alias(alias))
     return df.select(*select_exprs), True
+
+
+def _flatten_all_struct_columns(df: DataFrame) -> DataFrame:
+    """Flatten top-level and nested struct columns until no struct columns remain."""
+    while True:
+        df, flattened = _flatten_struct_columns_once(df)
+        if not flattened:
+            return df
 
 
 def explode_all_array_columns(df):
@@ -164,6 +173,48 @@ def _read_materialized_prejoin(path: Path, output_format: str) -> pd.DataFrame:
     return pd.read_parquet(path)
 
 
+def _write_fact_pandas(
+    fact_pd: pd.DataFrame,
+    target_dir: Path,
+    output_format: str,
+    append_output: bool,
+) -> int:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    fmt = (output_format or "parquet").strip().lower()
+    if fmt == "pandas_csv":
+        csv_path = target_dir / f"{target_dir.name}.csv"
+        write_header = not csv_path.exists() or not append_output
+        fact_pd.to_csv(csv_path, index=False, mode="a" if append_output else "w", header=write_header)
+        return 1
+
+    parquet_path = target_dir / f"{target_dir.name}.parquet"
+    if append_output and parquet_path.exists():
+        existing_pd = pd.read_parquet(parquet_path)
+        fact_pd = pd.concat([existing_pd, fact_pd], ignore_index=True)
+    fact_pd.to_parquet(parquet_path, index=False)
+    return 1
+
+
+def _merge_pandas_on_source_file(
+    left_pd: pd.DataFrame,
+    right_pd: pd.DataFrame,
+    suffix: str = "_struct",
+) -> pd.DataFrame:
+    """Left-join two pandas DataFrames on source_file with collision-safe suffixing."""
+    if left_pd.empty or right_pd.empty:
+        return left_pd
+    if "source_file" not in left_pd.columns or "source_file" not in right_pd.columns:
+        return left_pd
+
+    right_dedup = right_pd.drop_duplicates(subset=["source_file"], keep="first")
+    return left_pd.merge(
+        right_dedup,
+        on="source_file",
+        how="left",
+        suffixes=("", suffix),
+    )
+
+
 def process_single_file(
     spark: SparkSession,
     file_paths: List[Path],
@@ -181,6 +232,7 @@ def process_single_file(
     append_output: bool = False,
     enable_parquet_conversion: bool = True,  # If False, skip parquet writing
     spark_environment: str = "local",
+    app_config: Optional[Dict[str, Any]] = None,
 ) -> Dict:
     """
     Process a single JSON.gz file (or split files) to Parquet format.
@@ -295,6 +347,7 @@ def process_single_file(
     def build_fact_from_parts(
         rates: Optional[DataFrame],
         provider_flat: Optional[DataFrame],
+        struct_flat: Optional[DataFrame],
         stage_prefix: str,
     ) -> Optional[DataFrame]:
         if rates is None:
@@ -316,6 +369,15 @@ def process_single_file(
         if rates_with_providers is None:
             LOG.warning("%s no rates data after join", stage_prefix)
             return None
+
+        if struct_flat is not None and "source_file" in rates_with_providers.columns and "source_file" in struct_flat.columns:
+            struct_payload_cols = [c for c in struct_flat.columns if c != "source_file"]
+            if struct_payload_cols:
+                rates_with_providers = rates_with_providers.join(
+                    struct_flat.select("source_file", *struct_payload_cols).dropDuplicates(["source_file"]),
+                    on="source_file",
+                    how="left",
+                )
 
         rates_with_providers = explode_all_array_columns(rates_with_providers)
         log_df_count(rates_with_providers, f"{stage_prefix} rates_with_providers (after explode all arrays)")
@@ -376,16 +438,17 @@ def process_single_file(
         return fact_df_part
 
     def build_fact_df_from_raw(raw_full: DataFrame, stage_prefix: str) -> tuple[Optional[DataFrame], str]:
-        provider_flat, rates, url_status = build_provider_and_rates_from_raw(raw_full, stage_prefix)
-        fact_df_part = build_fact_from_parts(rates, provider_flat, stage_prefix)
+        provider_flat, rates, struct_flat, url_status = build_provider_and_rates_from_raw(raw_full, stage_prefix)
+        fact_df_part = build_fact_from_parts(rates, provider_flat, struct_flat, stage_prefix)
         return fact_df_part, url_status
 
     def build_provider_and_rates_from_raw(
         raw_full: DataFrame, stage_prefix: str
-    ) -> tuple[Optional[DataFrame], Optional[DataFrame], str]:
+    ) -> tuple[Optional[DataFrame], Optional[DataFrame], Optional[DataFrame], str]:
         # Local late-join mode: materialize providers and rates separately per file,
         # then join once across all files in the group.
         top_level_array_cols: List[str] = []
+        top_level_struct_cols: List[str] = []
         array_field_types: Dict[str, T.ArrayType] = {}
         for field in raw_full.schema.fields:
             if field.name == "source_file":
@@ -393,11 +456,20 @@ def process_single_file(
             if isinstance(field.dataType, T.ArrayType):
                 top_level_array_cols.append(field.name)
                 array_field_types[field.name] = field.dataType
+            elif isinstance(field.dataType, T.StructType):
+                top_level_struct_cols.append(field.name)
 
         cols_to_select = ["source_file"] + top_level_array_cols
         raw = raw_full.select(*cols_to_select)
         LOG.info("%s selected columns: %s", stage_prefix, cols_to_select)
         log_df_count(raw, f"{stage_prefix} select source + top-level arrays")
+
+        struct_flat = None
+        if top_level_struct_cols:
+            struct_raw = raw_full.select("source_file", *top_level_struct_cols)
+            struct_flat = _flatten_all_struct_columns(struct_raw)
+            struct_flat = simplify_column_names(struct_flat)
+            log_df_count(struct_flat, f"{stage_prefix} struct_flat (simplified)")
 
         provider_array_column: Optional[str] = None
         if "provider_references" in top_level_array_cols:
@@ -488,7 +560,7 @@ def process_single_file(
                 rates = rates.unionByName(part, allowMissingColumns=True)
             log_df_count(rates, f"{stage_prefix} rates (union of top-level arrays)")
 
-        return provider_flat, rates, url_status
+        return provider_flat, rates, struct_flat, url_status
 
     env_mode = (spark_environment or "local").strip().lower()
     if env_mode not in {"local", "cloud"}:
@@ -500,11 +572,15 @@ def process_single_file(
     files_written = 0
     total_rows = 0
     fact_output_dir = output_dir / "fact"
+    fact_before_provider_output_dir = output_dir / "fact_before_provider_data_join"
     rates_prejoin_output_dir = output_dir / "rates_prejoin"
     providers_prejoin_output_dir = output_dir / "providers_prejoin"
+    structs_prejoin_output_dir = output_dir / "structs_prejoin"
     fact_output_dir.mkdir(parents=True, exist_ok=True)
+    fact_before_provider_output_dir.mkdir(parents=True, exist_ok=True)
     rates_prejoin_output_dir.mkdir(parents=True, exist_ok=True)
     providers_prejoin_output_dir.mkdir(parents=True, exist_ok=True)
+    structs_prejoin_output_dir.mkdir(parents=True, exist_ok=True)
 
     if env_mode == "cloud":
         # Cloud mode: process each file independently, union at end, then write once.
@@ -555,7 +631,7 @@ def process_single_file(
         wrote_any_rates = False
         for i, raw_df in enumerate(raw_dfs, 1):
             stage_prefix = f"{group_prefix}file[{i}/{len(raw_dfs)}]"
-            provider_part, rates_part, part_url_status = build_provider_and_rates_from_raw(raw_df, stage_prefix)
+            provider_part, rates_part, struct_part, part_url_status = build_provider_and_rates_from_raw(raw_df, stage_prefix)
             url_expansion_status = merge_url_status(url_expansion_status, part_url_status)
             current_append = append_output or i > 1
 
@@ -564,6 +640,7 @@ def process_single_file(
             # - NPI filter on providers
             rates_prejoin_for_write = rates_part
             provider_prejoin_for_write = provider_part
+            struct_prejoin_for_write = struct_part
             if rates_prejoin_for_write is not None:
                 rates_prejoin_for_write = simplify_column_names(rates_prejoin_for_write)
                 if filters:
@@ -581,6 +658,8 @@ def process_single_file(
                     provider_npi_set=provider_npi_set,
                     filters=None,
                 )
+            if struct_prejoin_for_write is not None:
+                struct_prejoin_for_write = struct_prejoin_for_write.dropDuplicates(["source_file"])
 
             # Write pre-join DataFrames for inspection (after pre-join filters).
             if enable_parquet_conversion:
@@ -609,6 +688,18 @@ def process_single_file(
                             mode="a" if current_append else "w",
                             header=providers_write_header,
                         )
+                    if struct_prejoin_for_write is not None:
+                        structs_csv_path = structs_prejoin_output_dir / "structs_prejoin.csv"
+                        structs_pd = struct_prejoin_for_write.select(
+                            [F.col(c).cast("string").alias(c) for c in struct_prejoin_for_write.columns]
+                        ).toPandas()
+                        structs_write_header = not structs_csv_path.exists() or not current_append
+                        structs_pd.to_csv(
+                            structs_csv_path,
+                            index=False,
+                            mode="a" if current_append else "w",
+                            header=structs_write_header,
+                        )
                 else:
                     if rates_prejoin_for_write is not None:
                         rates_prejoin_for_write.write.mode("append" if current_append else "overwrite").option("compression", "zstd").parquet(
@@ -617,6 +708,10 @@ def process_single_file(
                     if provider_prejoin_for_write is not None:
                         provider_prejoin_for_write.write.mode("append" if current_append else "overwrite").option("compression", "zstd").parquet(
                             str(providers_prejoin_output_dir)
+                        )
+                    if struct_prejoin_for_write is not None:
+                        struct_prejoin_for_write.write.mode("append" if current_append else "overwrite").option("compression", "zstd").parquet(
+                            str(structs_prejoin_output_dir)
                         )
 
         if not wrote_any_rates:
@@ -635,18 +730,32 @@ def process_single_file(
             LOG.info("%sLocal mode: building final fact from materialized pre-join datasets via pandas...", group_prefix)
             rates_pd = _read_materialized_prejoin(rates_prejoin_output_dir, output_format)
             providers_pd = _read_materialized_prejoin(providers_prejoin_output_dir, output_format)
+            structs_pd = _read_materialized_prejoin(structs_prejoin_output_dir, output_format)
 
             if rates_pd.empty:
-                LOG.warning("%sRates pre-join dataset is empty; no final fact table written", group_prefix)
+                LOG.warning("%sRates pre-join dataset is empty; writing empty fact outputs", group_prefix)
+                _write_fact_pandas(
+                    fact_pd=rates_pd,
+                    target_dir=fact_before_provider_output_dir,
+                    output_format=output_format,
+                    append_output=append_output,
+                )
+                files_written = _write_fact_pandas(
+                    fact_pd=rates_pd,
+                    target_dir=fact_output_dir,
+                    output_format=output_format,
+                    append_output=append_output,
+                )
                 return {
                     "total_rows": 0,
-                    "files_written": 0,
+                    "files_written": files_written,
                     "output_directory": str(output_dir),
                     "url_expansion_status": url_expansion_status,
                 }
 
             rates_pd.columns = [str(c) for c in rates_pd.columns]
             providers_pd.columns = [str(c) for c in providers_pd.columns]
+            structs_pd.columns = [str(c) for c in structs_pd.columns]
             # Normalize common provider key columns to string before join-key selection.
             for key_col in ("provider_references", "provider_group_id"):
                 if key_col in rates_pd.columns:
@@ -682,18 +791,81 @@ def process_single_file(
                 )
                 fact_pd = rates_pd
 
-            if output_format.lower() == "pandas_csv":
-                csv_path = fact_output_dir / "fact.csv"
-                write_header = not csv_path.exists() or not append_output
-                fact_pd.to_csv(csv_path, index=False, mode="a" if append_output else "w", header=write_header)
-                files_written = 1
+            fact_pd = _merge_pandas_on_source_file(fact_pd, structs_pd, suffix="_struct")
+
+            # Deduplicate the entire fact table before the final provider-data enrichment join.
+            before_dedup_rows = len(fact_pd)
+            fact_pd = fact_pd.drop_duplicates(ignore_index=True)
+            after_dedup_rows = len(fact_pd)
+            if after_dedup_rows != before_dedup_rows:
+                LOG.info(
+                    "%sDeduplicated fact table before provider-data join: %d -> %d rows",
+                    group_prefix,
+                    before_dedup_rows,
+                    after_dedup_rows,
+                )
             else:
-                parquet_path = fact_output_dir / "fact.parquet"
-                if append_output and parquet_path.exists():
-                    existing_pd = pd.read_parquet(parquet_path)
-                    fact_pd = pd.concat([existing_pd, fact_pd], ignore_index=True)
-                fact_pd.to_parquet(parquet_path, index=False)
-                files_written = 1
+                LOG.info("%sFact table already unique before provider-data join (%d rows)", group_prefix, after_dedup_rows)
+
+            # Write a pre-enrichment fact snapshot before provider-data DB join.
+            _write_fact_pandas(
+                fact_pd=fact_pd,
+                target_dir=fact_before_provider_output_dir,
+                output_format=output_format,
+                append_output=append_output,
+            )
+
+            # Enrich fact table with provider names/locations from DB using NPI IN (...) query.
+            if app_config is not None and "npi" in fact_pd.columns:
+                fact_pd["npi"] = fact_pd["npi"].astype("string")
+                query_npis = [
+                    npi for npi in fact_pd["npi"].dropna().astype(str).tolist()
+                    if npi and npi.strip()
+                ]
+                query_npis = list(dict.fromkeys(query_npis))
+                if query_npis:
+                    try:
+                        provider_rows = get_provider_data_by_npis(app_config, query_npis)
+                        if provider_rows:
+                            provider_cols = [
+                                "npi",
+                                "provider_name",
+                                "practice_location",
+                                "provider_org_name",
+                                "provider_last_name",
+                                "provider_first_name",
+                                "provider_middle_name",
+                                "practice_addr_line1",
+                                "practice_addr_line2",
+                                "practice_city",
+                                "practice_state",
+                                "practice_postal_code",
+                                "practice_phone",
+                            ]
+                            provider_pd = pd.DataFrame(provider_rows, columns=provider_cols)
+                            provider_pd = provider_pd.drop_duplicates(subset=["npi"], keep="first")
+                            fact_pd = fact_pd.merge(provider_pd, on="npi", how="left")
+                        else:
+                            LOG.info("%sNo provider-data rows returned for %d NPI(s)", group_prefix, len(query_npis))
+                    except Exception as e:
+                        LOG.warning("%sProvider-data enrichment skipped due to query error: %s", group_prefix, e)
+                else:
+                    LOG.info("%sProvider-data enrichment skipped: no non-empty NPIs in fact table", group_prefix)
+            else:
+                LOG.info(
+                    "%sProvider-data enrichment skipped: app_config=%s npi_column_present=%s",
+                    group_prefix,
+                    app_config is not None,
+                    "npi" in fact_pd.columns,
+                )
+
+            # Write post-enrichment fact table.
+            files_written = _write_fact_pandas(
+                fact_pd=fact_pd,
+                target_dir=fact_output_dir,
+                output_format=output_format,
+                append_output=append_output,
+            )
 
             total_rows = len(fact_pd)
     
